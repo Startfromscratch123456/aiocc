@@ -1,0 +1,189 @@
+#多节点批量删除旧版内核,谨慎使用
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rpm -aq | grep kernel'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rpm -e kernel-2.6.32504.8.1.el6_lustre.x86_64-1.x86_64 -f --nodeps'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='yum -y remove kernel-2.6.32504.8.1.el6_lustre.x86_64-1.x86_64'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='yum -y remove kernel-firmware-2.6.32-358.el6.noarch'
+
+#多节点批量重启
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd=reboot
+#停掉节点中的fio进程
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd="kill -9 $(pidof fio)"
+
+#多节点批量删除文件
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/LustreTools'
+#多节点批量建立文件夹
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='mkdir /home/development'
+#多节点批量传送文件
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/LustreTools --location=/home/development/
+
+cd /home/development/LustreTools/batch/
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='cat /home/development/LustreTools/batch/config/multexu.tmp'
+
+#全自动化编译
+sh /home/development/LustreTools/batch/ctrl/auto_lustre_2.8.0.sh --install_lmt=0 --skip_build_kernel=1 --goto_compile=1 --only_pre=1
+sh /home/development/LustreTools/batch/ctrl/auto_lustre_2.8.0.sh --only_pre=1
+#半自动化编译
+sh /home/development/LustreTools/batch/build/build_lustre_server.sh --skip_install_dependency=1
+rm -f /home/development/LustreTools/source/install/lustre-*
+cp /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*.rpm /home/development/LustreTools/source/install/ 
+sh /home/development/LustreTools/batch/build/build_lustre_client.sh --skip_install_dependency=1
+rm -rf /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*
+
+#lustre 单节点上文件系统部署相关命令
+mkfs.lustre --fsname=lustrefs --mgs --mdt --index=0 /dev/vda7
+mkfs.lustre --fsname=lustrefs --mdsnode=192.168.122.15@tcp --ost --index=0 /dev/vda7
+mount -t lustre /dev/vda7 /mnt/lustre
+mkdir /mnt/ost1 && mount -t lustre /dev/vda7 /mnt/ost1/
+#xshell传送文件软件安装
+yum install lrzsz
+
+#安装lmt
+yum -y install libtool-ltdl-devel glibc-common libtool autoconf automake mysql-devel expat-devel 
+yum -y install openssl098e
+yum -y install perl-Date-Manip
+# restart Cerebro on  Lustre servers
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='/sbin/service cerebrod restart'
+sh /home/development/LustreTools/batch/lmt/lmt_install.sh --mdsnode=192.168.122.15
+
+#删除旧的lustre
+rpm -e lustre-osd-ldiskfs-mount-2.8.0-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64.x86_64 -f --nodeps
+rpm -e lustre-modules-2.8.0-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64.x86_64 -f --nodeps
+rpm -e pcp-pmda-lustre-3.10.6-2.el7.x86_64 -f --nodeps
+rpm -e pcp-pmda-lustrecomm-3.10.6-2.el7.x86_64 -f --nodeps
+rpm -e lustre-osd-ldiskfs-2.8.0-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64.x86_64 -f --nodeps
+rpm -e lustre-2.8.0-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64.x86_64 -f --nodeps
+
+#重启cerebrod
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='/etc/init.d/cerebrod restart'
+
+#虚拟机文件复制
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c1.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c2.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c3.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c4.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c5.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c6.qcow2 /home/ca21/Downloads/
+echo yes | cp /home/ca21/DevelopmentFiles/centos7-c7.qcow2 /home/ca21/Downloads/
+
+echo 192.168.3.161 ca01 ca01 >> /etc/hosts
+echo 192.168.3.164 ca04 ca04 >> /etc/hosts
+echo 192.168.3.181 ca21 ca21 >> /etc/hosts
+echo 192.168.3.186 ca26 ca26 >> /etc/hosts
+echo 192.168.3.208 bd08 bd08 >> /etc/hosts
+echo 192.168.3.123 de03 de03 >> /etc/hosts
+
+touch /etc/hostsfile
+echo ca01 >> /etc/hostsfile
+echo ca04 >> /etc/hostsfile
+echo ca21 >> /etc/hostsfile
+echo ca26 >> /etc/hostsfile
+echo bd08 >> /etc/hostsfile
+echo de03 >> /etc/hostsfile
+
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-clusterlist-hostsfile-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-metric-boottime-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-metric-loadavg-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-metric-memory-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-metric-network-1.12-1.x86_64.rpm'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='cd /home/development/LustreTools/source/lmt/ && rpm -ivh cerebro-event-updown-1.12-1.x86_64.rpm'
+
+lctl set_param ost.OSS.ost_io.nrs_tbf_rule="start computenodes{192.168.3.161@tcp} 1000"
+lctl set_param ost.OSS.ost_io.nrs_tbf_rule="start fio_user0 {qos_test.0} 1000"
+sh /home/development/LustreTools/batch/uninstall/auto_lustre2.8.0_uninstall.sh --skip_uninstall_kernel=1
+#centos7修改主机名
+hostnamectl --static set-hostname
+
+cd /home/development/LustreTools/batch
+
+scp -rp /home/development/LustreTools root@192.168.122.101:/home/development/
+cp /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*.rpm /home/development/LustreTools/source/install/ 
+scp root@192.168.122.101:/home/development/LustreTools/source/install/* /home/development/LustreTools/source/install/
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/LustreTools'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/LustreTools --location=/home/development/
+sh /home/development/LustreTools/batch/install/auto_lustre2.8.0_install.sh --skip_install_kernel=1
+sh /home/development/LustreTools/batch/deploy/auto_lustre2.8.0_deploy.sh --mdsnode=192.168.122.15 --devname=/dev/vda --devindex=7
+
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo "127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4" > /etc/hosts'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo "::1         localhost localhost.localdomain localhost6 localhost6.localdomain6" >> /etc/hosts'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -f /etc/hostfile && touch /etc/hostfile'
+scp profile.war root@123.206.16.241:/home/development/java/appBase
+
+hostnamectl --static set-hostname qosnode7
+service network restart
+
+
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/LustreTools'
+sleep 30s
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/LustreTools --location=/home/development/
+sleep 300s
+sh /home/development/LustreTools/batch/install/auto_lustre2.8.0_install.sh
+sleep 1800s
+sh /home/development/LustreTools/batch/deploy/auto_lustre2.8.0_deploy.sh --mdsnode=192.168.122.15 --devname=/dev/vda --devindex=7
+sleep 1800s
+     
+lctl set_param osc.lustrefs-OST0000-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0001-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0002-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lctl set_param osc.lustrefs-OST0003-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+
+lctl set_param osc.lustrefs-OST0000-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0001-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0002-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lctl set_param osc.lustrefs-OST0003-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lustrefs-OST0000-osc-ffff880078f1e800  lustrefs-OST0001-osc-ffff880078f1e800  lustrefs-OST0002-osc-ffff880078f1e800  lustrefs-OST0003-osc-ffff880078f1e800
+
+
+systemctl start firewalld
+firewall-cmd --zone=public --add-port=80/tcp --permanent
+firewall-cmd --reload
+
+lctl set_param ost.OSS.ost_io.nrs_tbf_tw_interval="start sscdt 1000"
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo 8 > /proc/sys/kernel/printk'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='dmesg --clear'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='dmesg'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='lctl set_param ost.OSS.ost_io.nrs_tbf_tw_interval="start sscdt 1000"'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='cat /proc/fs/lustre/ost/OSS/ost_io/stats' | grep 'bandwidth'
+ 
+ 
+scp *.war root@123.206.16.241:/home/development/java/appBase
+
+sh /home/development/LustreTools/batch/tool/set_display.sh 1440 900
+
+
+virsh start centos7.0-c1
+virsh start centos7.0-c2
+virsh start centos7.0-c3
+virsh start centos7.0-c4
+virsh start centos7.0-c5
+virsh start centos7.0-c6
+virsh start centos7.0-c7
+virsh start centosdev
+
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='mkdir -p /tmp/lustre/'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='touch /tmp/lustre/lustre_tbf_cfg'
+sh /home/development/LustreTools/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo 10485760 >  /tmp/lustre/lustre_tbf_cfg'
+
+
+echo read_bandwidth: 13 > a.import
+echo write_bandwidth: 22 >> a.import
+echo read_bandwidth: 12 > b.import
+echo write_bandwidth: 232 >> b.import
+echo read_bandwidth: 54 > c.import
+echo write_bandwidth: 65 >> c.import
+echo read_bandwidth: 76 > d.import
+echo write_bandwidth: 98 >> d.import
+
+
+
+
+
+
