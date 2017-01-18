@@ -21,13 +21,12 @@ else
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
-clear_execute_statu_signal
+clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 #
 #client节点收集本节点的qos_rules到$1
 #
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__extract_bandwidth.sh $1"
-ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}"  1 1
-
+ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "3" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 read_bandwidth=0
 write_bandwidth=0
 bandwidth=0
@@ -39,9 +38,10 @@ if [ -z "$1" ];then
 	print_message "MULTEXU_ERROR" "parameter missing..."
 	exit 1
 fi
+auto_mkdir "$1" "force"
 while [ $COUNT -lt $T ];
 do
-	rm -f $1/*.qos_rules
+	rm -f $1/*.import
 	#
 	#复制各节点$1目录下的qos_rules文件到当前节点的$1目录下
 	#
@@ -57,21 +57,25 @@ do
 	for FILE in ${IMPORT_FILE_ARRY[*]}
 	do
 		read_bandwidth=$(grep 'read_bandwidth' ${FILE} | cut -d : -f 2)
-		write_bandwidth=$(grep 'write_bandwidth' ${FILE} | cut -d : -f 2 ))
-		bw=(( ${read_bandwidth}+${write_bandwidth} ))
+		if [ "x$read_bandwidth" = "x" ];then
+			read_bandwidth=0
+		fi
+		write_bandwidth=$(grep 'write_bandwidth' ${FILE} | cut -d : -f 2 )
+		if [ "x$write_bandwidth" = "x" ];then
+			write_bandwidth=0
+		fi
+        bw=$(( ${read_bandwidth}+${write_bandwidth} ))
 		bandwidth_record="${bandwidth_record} ${bw}"
 	done
 	(( COUNT+=1 ))
 done
-echo ${bandwidth_record} $1/bandwidth.record
+echo ${bandwidth_record} > $1/bandwidth.record
 
-python $1/bandwidth_statistic.py $1/bandwidth.record $1/bandwidth.statistic
+python ${AIOCC_BATCH_DIR}/bandwidth_statistic.py $1/bandwidth.record $1/bandwidth.statistic
 #echo ${read_bandwidth}
 #echo ${write_bandwidth}
 #echo $(( (${read_bandwidth}+ ${write_bandwidth})/(${IMPORT_FILE_NUM}*${T}) )) > $1/realtime_avg.bandwidth
 #echo "scale=2;(${read_bandwidth}+ ${write_bandwidth})/(${IMPORT_FILE_NUM}*${T})" | bc > $1/realtime_avg.bandwidth
-
-send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}"
-
+send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
 

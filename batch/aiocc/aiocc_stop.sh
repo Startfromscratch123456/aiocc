@@ -12,17 +12,18 @@
 
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
-if [ ! -f __aiocc_init.sh ]; then
+if [ ! -f ./__aiocc_init.sh ]; then
 	echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
 	exit 1
 else
-	source ../__aiocc_init.sh
+	source ./__aiocc_init.sh
 	echo 'AIOCC INFO:initialization completed...'
 	`${PAUSE_CMD}`
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
-clear_execute_statu_signal 
+clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
 echo "false" > ${AIOCC_CONFIG_DIR}/work_loop.cfg
 print_message "MULTEXU_INFO" "AIOCC has been stopped..."
+send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"

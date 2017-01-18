@@ -17,8 +17,6 @@ if [ ! -f ../ctrl/__init.sh ]; then
 	exit 1
 else
 	source ../ctrl/__init.sh
-	echo 'MULTEXU INFO:initialization completed...'
-	`${PAUSE_CMD}`
 fi
 
 #
@@ -32,11 +30,12 @@ export AIOCC_BATCH_DIR="${MULTEXU_BATCH_DIR}/aiocc"
 export AIOCC_SOURCE_DIR="${MULTEXU_SOURCE_DIR}/aiocc"
 export AIOCC_SEARCH_POLICY_DIR="${AIOCC_BATCH_DIR}/search_policy"
 export AIOCC_CONFIG_DIR="${AIOCC_BATCH_DIR}/config"
+export AIOCC_WORKLOADS_DIR="${AIOCC_BATCH_DIR}/workloads"
 export AIOCC_RULE_DIR="${AIOCC_SOURCE_DIR}/rule"
 
-export AIOCC_CTROL_STATUS_CONTINUE="CONTINUE" 
-export AIOCC_CTROL_STATUS_EXIT="EXIT" 
-export AIOCC_EXECUTE_STATUS_FINISHED="FINISHED"
+export AIOCC_CTROL_STATUS_CONTINUE="AIOCC_CONTINUE" 
+export AIOCC_CTROL_STATUS_EXIT="AIOCC_EXIT" 
+export AIOCC_EXECUTE_STATUS_FINISHED="AIOCC_FINISHED"
 
 #执行过程中的信号处理,存储信号的共享文件
 export AIOCC_EXECUTE_SIGNAL_FILE="${AIOCC_CONFIG_DIR}/execute.signal" 

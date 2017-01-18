@@ -21,15 +21,16 @@ else
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
-clear_execute_statu_signal 
+clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
 LUSTRE_PROC_OSC="/proc/fs/lustre/osc"
 OSC_ARRAY=($(ls ${LUSTRE_PROC_OSC}))
-
-rm -f  $1/*.qos_rules
+auto_mkdir $1 "force"
+rm -f  $1/*.rule
 
 for OSC in ${OSC_ARRAY[*]}
 do
-	cp ${LUSTRE_PROC_OSC}/${OSC}/qos_rules $1/${HOSTNAME}_${OSC}.qos_rules
+	cp ${LUSTRE_PROC_OSC}/${OSC}/qos_rules $1/${HOSTNAME}_${OSC}.rule
+	wait
 done
-send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}"
+send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"

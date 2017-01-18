@@ -21,19 +21,22 @@ else
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
-clear_execute_statu_signal
+clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
 #
 #client节点收集本节点的qos_rules到$1
 #
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__gather_qos_rules.sh $1"
-ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" 1 1
-rm -f $1/*.qos_rules
+ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "3" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
+rm -f $1/*.rule
+auto_mkdir $1 "force"
 #
 #复制各节点$1目录下的qos_rules文件到当前节点的$1目录下
 #
 for host_ip in $(cat "${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out")
 do 
-	scp root@${host_ip}:$1/*.qos_rules $1/
+	scp root@${host_ip}:$1/*.rule $1/
 done
-send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}"
+
+send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"
+
