@@ -23,8 +23,7 @@ source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
 #local score_line=`sh ${AIOCC_BATCH_DIR}/_get_highest_score.sh $round_summary_file`
-rs=$1
-round_summary_file=$2
+round_summary_file=$1
 #max_bandwidth_given=$3
 max_score=0
 max_score_line=
@@ -37,5 +36,6 @@ do
 		max_score_line=${score_line}
 	fi
 done
-eval "$rs=${max_score_line}"
+echo "${max_score_line}"
+#eval "$rs=${max_score_line}"
 #send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"

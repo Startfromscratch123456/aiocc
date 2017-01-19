@@ -146,6 +146,7 @@ function __cleanup()
 		print_message "MULTEXU_INFO" "AIOCC process finished..."
 		print_message "MULTEXU_INFO" "Total time spent:${time_cost} s"
 	fi
+	rm -f ${AIOCC_CONFIG_DIR}/*.cfg
 }
 
 function delete_candidate_rule()
@@ -194,76 +195,65 @@ function run_workloads()
 }
 # get rule from a score line
 _get_rule_of_scoreline() {
-    local SCORE_LINE=$1
-    echo "$SCORE_LINE" | cut -d',' -f 1 
+    local score_line=$1
+    echo `echo "$score_line" | cut -d',' -f 1`
 }
 
 # get score from a score line
 _get_score_of_scoreline() {
-    local SCORE_LINE=$1
-    echo "$SCORE_LINE" | cut -d',' -f 2
+    local score_line=$1
+    echo `echo "$score_line" | cut -d',' -f 2`
 }
 
 function next_round()
 {
-	local epoch_finished_rules_file="${epoch_result_dir}/finished_rules.cfg"
-	local next_rule_sn_file="${AIOCC_CONFIG_DIR}/}next_rule_sn.cfg"
-	#${candidate_rule},${score},${candidate_avg_bandwidth},${candidate_avg_var},${candidate_try}
 	local round_best_score_line=$1
-	local round_best_score="echo ${round_best_score_line} | cut -d ',' -f 2"
-	if [ -f ${next_rule_sn_file} ];then
-		local next_rule_sn=`cat ${next_rule_sn_file}`
+	local epoch=`cat ${AIOCC_RULE_DATABASE_DIR}/epoch.cfg`
+	local round=`cat ${epoch_result_dir}/round.cfg`
+	local epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
+	local round_best_score=`_get_score_of_scoreline "${round_best_score_line}"`
+	local next_rule_sn_file="${AIOCC_CONFIG_DIR}/next_rule_sn.cfg"
+
+	if [ -f ${next_rule_sn_file} ]; then
+		next_rule_sn=`cat ${next_rule_sn_file}`
 	else
 		next_rule_sn=1
 		echo ${next_rule_sn} > ${next_rule_sn_file}
 	fi
-	
-	current_rule=-1
-	current_rule_file="${epoch_result_dir}/current.cfg"
-	rule_best_score_line="0,0"
-	if [ -f ${current_rule_file} ];then
-		current_rule=`cat ${current_rule_file}`
-		rule_best_socre_file="${epoch_result_dir}/rule_${current_rule}_best_score.cfg"
-		if [ -f ${rule_best_socre_file} ];then
-			local rule_best_score_line=`cat ${rule_best_socre_file}`
-		fi		
-	fi
-	
-	rule_best_socre=`_get_score_of_scoreline "${rule_best_score_line}"`
-	
-	if [ ${round_best_score} -gt ${rule_best_socre} -o ${rule_best_score_line} = ${round_best_score} ];then 
-		rule_best_score_line=${round_best_score_line}
-		local best_rule=`_get_rule_of_scoreline "${rule_best_score_line}"`
-		round=$(( $round + 1 ))
+
+	epoch_best_score_file="${epoch_result_dir}/epoch_${epoch}_best_score.csv"
+	if [ ! -f $epoch_best_score_file ]; then
+		epoch_best_score_line="0,0"
 	else
-		echo ${current_rule} >> ${epoch_finished_rules_file}
-		local best_rule=`_get_rule_of_scoreline "${rule_best_score_line}"`
-		num_finished_rules=`wc -l "${epoch_finished_rules_file}" | awk '{print $1}'`
-		num_total_rules=$(( `wc -l "${AIOCC_RULE_TESTED_DIR}/${best_rule}/merged_rule.rule" | '{print $1}'` - 1 )) #减一是为去除第一行的rule_no,rules_per_sec
-		if [ ${num_finished_rules} -eq ${num_total_rules} ];then
-			epoch=$(( $epoch + 1 ))
-			echo $epoch>${AIOCC_RULE_DATABASE_DIR}/epoch.cfg
-			epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
-			auto_mkdir ${epoch_result_dir} "force"
-			round=0
-			current_rule=-1
-			if [ $(( $epoch % 4 )) -eq 4 -o $num_total_rules -eq 1 ];then
-				next_rule_sn=`python ${AIOCC_BATCH_DIR}/split_rule.py "${AIOCC_RULE_TESTED_DIR}/${best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" "${next_rule_sn}"`
-				echo ${next_rule_sn} > ${next_rule_sn_file}
-			fi	
-		else
-			current_rule=-1
-			round=$(( $round + 1 ))
-		fi
+		epoch_best_score_line=`cat $epoch_best_score_file`
 	fi
-	gen_candidate_rs=`python ${AIOCC_BATCH_DIR}/gen_candidate_rules.py "${AIOCC_RULE_TESTED_DIR}/${best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn $current_rule "$epoch_finished_rules_file"`
-	next_rule_sn=`echo $gen_candidate_rs | cut -f 1 -d','`
-	current_rule=`echo $gen_candidate_rs | cut -f 2 -d','`
-	rule_best_socre_file="${epoch_result_dir}/rule_${current_rule}_best_score.cfg"
-	echo ${rule_best_score_line} > ${rule_best_socre_file}
-	echo ${next_rule_sn} > ${next_rule_sn_file}
-	echo ${round} > ${epoch_result_dir}/round.cfg
-	echo ${current_rule} > ${current_rule_file}
+	epoch_best_score=`_get_score_of_scoreline "${epoch_best_score_line}"`
+
+	# is this round's best score better than current epoch best score?
+	# $round_best_score_line = $epoch_best_score_line is possible if
+	# the processing of the last round results was interrupted before
+	# it can finish
+	if [ $round_best_score -gt $epoch_best_score -o $round_best_score_line = $epoch_best_score_line ]; then
+		epoch_best_score_line=$round_best_score_line
+		echo $epoch_best_score_line >$epoch_best_score_file
+		epoch_best_rule=`_get_rule_of_scoreline $epoch_best_score_line`
+		local generate_rule_str=`python ${AIOCC_BATCH_DIR}/generate_candidate_rules.py "${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn `
+		next_rule_sn=`echo ${generate_rule_str} | cut -d',' -f 1`
+		echo $next_rule_sn > ${next_rule_sn_file}
+		round=$(( $round + 1 ))
+		echo $round > ${epoch_result_dir}/round.cfg
+	else
+		epoch_best_rule=`get_rule $epoch_best_score_line`
+		next_rule_sn=`python ${AIOCC_BATCH_DIR}/split_rule.py "${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn`
+		echo $next_rule_sn >${SAVE_DIR}/next_rule_sn
+		# start a new epoch
+		epoch=$(( $epoch + 1 ))
+		echo $epoch >${SAVE_DIR}/epoch
+		epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
+		auto_mkdir ${epoch_result_dir} "weak"
+		round=0
+		echo $round >${AIOCC_CONFIG_DIR}/round
+	fi
 }
 
 function benchmark_rule()
@@ -333,7 +323,7 @@ function benchmark_rule()
     if [ -f ${round_summary_file} ];then
         sed -i "s/^${candidate_rule},.*/${score_line}/g" ${round_summary_file}
     else
-        echo ${score_line} >> ${round_summary_file}
+        echo ${score_line} >> ${round_summary_file}	
     fi
 	local var_percentage=`echo "$candidate_avg_var / $candidate_avg_bandwidth" | bc`
     eval "$rs='${var_percentage},${candidate_try}'"
@@ -372,7 +362,7 @@ function get_best_round_score()
     
 	#重新选择得分最高的规则,如果其尝试次数不超过candidate_try_limitation次,重新优化之
     while true; do
-        sh ${AIOCC_BATCH_DIR}/_get_highest_score.sh score_line $round_summary_file
+        local score_line=`sh ${AIOCC_BATCH_DIR}/_get_highest_score.sh $round_summary_file`
         local score_line_num=`wc -l $round_summary_file | awk '{print $1}'`
         local candidate_rule=`echo $score_line | cut -d, -f 1`
         local candidate_try=`echo $score_line | cut -d, -f 5`
@@ -408,12 +398,12 @@ else
 		:>${AIOCC_RULE_CANDIDATE_DIR}/0
         print_message "MULTEXU_INFO" "Starting Epoch 0 with default rule"
         if [ $enable_m -eq 0 ]; then
-            cat >${AIOCC_RULE_CANDIDATE_DIR}/0 <<-EOF
+            cat >${AIOCC_RULE_CANDIDATE_DIR}/0 <<EOF
 1,2
 0,${MAX_INT},0,${MAX_INT},0,${MAX_INT},-1,0,20000
 EOF
         else
-            cat >${AIOCC_RULE_CANDIDATE_DIR}/0 <<-EOF
+            cat >${AIOCC_RULE_CANDIDATE_DIR}/0 <<EOF
 1,2
 0,${MAX_INT},0,${MAX_INT},0,${MAX_INT},100,0,20000
 EOF
@@ -423,7 +413,8 @@ EOF
         cp ${AIOCC_CONFIG_DIR}/initial.rule ${AIOCC_RULE_CANDIDATE_DIR}/0
     fi
 fi
-
+epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
+auto_mkdir ${epoch_result_dir} "force"
 #run_workloads ${workloads_type}
 echo "true" > ${AIOCC_CONFIG_DIR}/work_loop.cfg
 # main work loop
@@ -432,16 +423,16 @@ while [ x"$work_loop" == x"true" ];
 do
 	epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
 	#同一平台上多次学习可以使用auto_mkdir ${epoch_result_dir} "weak",即保留以前的数据信息
-	auto_mkdir ${epoch_result_dir} "force"
+	auto_mkdir ${epoch_result_dir} "weak"
     if [ ! -f ${epoch_result_dir}/round.cfg ];then
         echo 0 >  ${epoch_result_dir}/round.cfg
     fi
     round=`cat ${epoch_result_dir}/round.cfg`
     round_summary_file="${epoch_result_dir}/round_${round}_summary.csv"
     deploy_candidate_rules
-    get_best_round_score rs $round_summary_file
+    get_best_round_score rt_round_best_score_line $round_summary_file
 	check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}
-	next_round ${rs}
+    next_round ${rt_round_best_score_line}
 done # epoch loop
 
 __cleanup

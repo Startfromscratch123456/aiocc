@@ -43,4 +43,4 @@ def get_score(_objective_model="afactor"):
 
 if objective_model not in objective_function.keys():
     objective_model = "afactor"
-print(get_score(objective_model))
+print(int(get_score(objective_model)))
