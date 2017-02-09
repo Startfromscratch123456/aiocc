@@ -51,7 +51,7 @@ def splice_cube(rule, split_points):
     return ret
 
 
-def write_rule(file, rule):
+def write_rule(f, rule):
     s = ""
     for col_id in range(output_col_range):
         if s != "":
@@ -73,10 +73,10 @@ row_id = 0
 input_rule_file = sys.argv[1]
 output_dir = sys.argv[2]
 next_rule_sn = int(sys.argv[3])
-
+next_rule_sn_file = sys.argv[4]
 # read in current rules
-with open(input_rule_file, 'rb') as current_rule_file:
-    current_rule_content = current_rule_file.readlines()
+with open(input_rule_file, 'r') as current_rule_file:
+    current_rule_content = csv.reader(current_rule_file)
     for row in current_rule_content:
         # first line is rule_no
         if rule_no == 0:
@@ -103,17 +103,17 @@ filename = output_dir + '/' + str(next_rule_sn)
 next_rule_sn += 1
 if debug > 0:
     print('Writing rule file %s' % filename)
-f = open(filename, 'w')
-print("%d,%d" % (rule_no + pow(2, dimension) - 1, mrif_update_rate), file=f)
-row_id = 0
-for rule in rules:
-    if row_id != busiest_rule_id:
-        write_rule(f, rule)
-    else:
-        split_points = rule[split_point_start_col:split_point_end_col]
-        new_rules = splice_cube(rule, split_points)
-        for nr in new_rules:
-            write_rule(f, nr)
-    row_id += 1
-
-print(next_rule_sn)
+with open(filename, 'w') as f:
+    print("%d,%d" % (rule_no + pow(2, dimension) - 1, mrif_update_rate), file=f)
+    row_id = 0
+    for rule in rules:
+        if row_id != busiest_rule_id:
+            write_rule(f, rule)
+        else:
+            split_points = rule[split_point_start_col:split_point_end_col]
+            new_rules = splice_cube(rule, split_points)
+            for nr in new_rules:
+                write_rule(f, nr)
+        row_id += 1    
+with open(next_rule_sn_file,"w+") as f:
+    print("%d" % next_rule_sn,file=f)

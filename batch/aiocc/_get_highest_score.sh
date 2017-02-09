@@ -31,7 +31,7 @@ max_score_line=
 for score_line in $(cat ${round_summary_file})
 do
 	score=`echo ${score_line} | cut -d, -f 2`
-	if [ `echo "${score} > ${max_score}" | bc -l` -eq 1 ];then
+	if [ `echo "${score} >= ${max_score}" | bc -l` -eq 1 ];then
 		max_score=${score} 
 		max_score_line=${score_line}
 	fi

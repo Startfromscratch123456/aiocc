@@ -21,11 +21,13 @@ if len(sys.argv) < 4:
 input_rule_file = sys.argv[1]
 output_dir = sys.argv[2]
 next_rule_sequence = int(sys.argv[3])
+next_rule_sn_file = sys.argv[4]
 working_on_rule = -1
 excluded_rules = []
-if len(sys.argv) >= 5:
-    working_on_rule = int(sys.argv[4])
-    list_file_of_excluded_rules = sys.argv[5]
+
+if len(sys.argv) >= 6:
+    working_on_rule = int(sys.argv[5])
+    list_file_of_excluded_rules = sys.argv[6]
     if os.path.isfile(list_file_of_excluded_rules):
         f = open(list_file_of_excluded_rules, 'r')
         while True:
@@ -43,10 +45,11 @@ fields = []
 # Remy used 20 for upper limit for b with a max_window = 256.
 # Our mrif_upper_limit is 30, therefore we should use
 # mrif_upper_limit / ( 256 / 20 ) * 100
+# max rpcs in flight (MRIF)
 mrif_upper_limit = 30
 b100_upper_limit = mrif_upper_limit * 20 * 100 / 256
 b100_lower_limit = -b100_upper_limit
-fields.append(dict(name="m100", column_index=6, lower_limit=30, upper_limit=200, delta_gran=5, exhaust_search_step=4))
+fields.append(dict(name="m100", column_index=6, lower_limit=1, upper_limit=200, delta_gran=5, exhaust_search_step=4))
 fields.append(dict(name="b100", column_index=7, lower_limit=b100_lower_limit, upper_limit=b100_upper_limit, delta_gran=30,
                    exhaust_search_step=4))
 fields.append(dict(name="tau", column_index=8, lower_limit=0, upper_limit=70000, delta_gran=500, exhaust_search_step=6))
@@ -87,8 +90,8 @@ def write_rule_file():
 
 # read in current rules
 #best rules summary file
-with open(input_rule_file, 'rb') as qos_rule_file:
-    qos_rule_file_content = qos_rule_file.readlines()
+with open(input_rule_file, 'r') as qos_rule_file:
+    qos_rule_file_content = csv.reader(qos_rule_file)
     for row in qos_rule_file_content:
         # first line is rule_no
         if rule_no == 0:
@@ -159,6 +162,6 @@ def gen_rules_using_field(field_id):
             gen_rules_using_field(field_id + 1)
         delta *= scale_factor
 
-
 gen_rules_using_field(0)
-print("% d, % d" % (next_rule_sequence, working_on_rule))
+with open(next_rule_sn_file, 'w+') as f:
+    print("% d, % d" % (next_rule_sequence, working_on_rule), file=f)

@@ -9,7 +9,9 @@
 #
 #运行本脚本时,假设主控制节点与所有节点(包括编译节点)已经进行SSH认证
 #
-
+#前置条件:lustre文件系统运行;workload运行;
+#
+#
 sleeptime=60 #设置检测的睡眠时间
 limit=10 #递减下限
 
@@ -34,7 +36,7 @@ clear_execute_statu_signal
 clear_execute_statu_signal ${AIOCC_EXECUTE_SIGNAL_FILE}
 #系统的位数
 OS_TYPE="X64"
-MAX_INT=18446744073709551615
+MAX_INT=2147483648
 #目录设置
 #rule根目录
 AIOCC_RULE_DATABASE_DIR=""
@@ -112,7 +114,8 @@ function __initialize()
 	max_bandwidth_file="${AIOCC_RULE_DATABASE_DIR}/max_bandwidth" 
 	if [ $(getconf WORD_BIT) = '32' -a $(getconf LONG_BIT) = '64' ] ; then
 		OS_TYPE="X64"
-		MAX_INT=18446744073709551615
+		#MAX_INT=18446744073709551615
+        MAX_INT=2147483647
 	else
 		OS_TYPE="X32"
 		MAX_INT=2147483647
@@ -212,10 +215,13 @@ function next_round()
 	local round=`cat ${epoch_result_dir}/round.cfg`
 	local epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
 	local round_best_score=`_get_score_of_scoreline "${round_best_score_line}"`
-	local next_rule_sn_file="${AIOCC_CONFIG_DIR}/next_rule_sn.cfg"
+	local next_rule_sn_file="${AIOCC_RULE_DATABASE_DIR}/next_rule_sn.cfg"
 
 	if [ -f ${next_rule_sn_file} ]; then
 		next_rule_sn=`cat ${next_rule_sn_file}`
+		if [ x${next_rule_sn} = x ];then
+			next_rule_sn=1
+		fi
 	else
 		next_rule_sn=1
 		echo ${next_rule_sn} > ${next_rule_sn_file}
@@ -237,22 +243,25 @@ function next_round()
 		epoch_best_score_line=$round_best_score_line
 		echo $epoch_best_score_line >$epoch_best_score_file
 		epoch_best_rule=`_get_rule_of_scoreline $epoch_best_score_line`
-		local generate_rule_str=`python ${AIOCC_BATCH_DIR}/generate_candidate_rules.py "${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn `
+        python ${AIOCC_BATCH_DIR}/generate_candidate_rules.py ${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule ${AIOCC_RULE_CANDIDATE_DIR} $next_rule_sn ${next_rule_sn_file}
+		local generate_rule_str=`cat ${next_rule_sn_file}`
 		next_rule_sn=`echo ${generate_rule_str} | cut -d',' -f 1`
 		echo $next_rule_sn > ${next_rule_sn_file}
 		round=$(( $round + 1 ))
 		echo $round > ${epoch_result_dir}/round.cfg
 	else
-		epoch_best_rule=`get_rule $epoch_best_score_line`
-		next_rule_sn=`python ${AIOCC_BATCH_DIR}/split_rule.py "${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn`
-		echo $next_rule_sn >${SAVE_DIR}/next_rule_sn
+		epoch_best_rule=`_get_rule_of_scoreline $epoch_best_score_line`
+		python ${AIOCC_BATCH_DIR}/split_rule.py "${AIOCC_RULE_TESTED_DIR}/${epoch_best_rule}/merged_rule.rule" "${AIOCC_RULE_CANDIDATE_DIR}" $next_rule_sn ${next_rule_sn_file}
+		local generate_rule_str=`cat ${next_rule_sn_file}`
+		next_rule_sn=`echo ${generate_rule_str} | cut -d',' -f 1`
+		echo $next_rule_sn > ${next_rule_sn_file}
 		# start a new epoch
 		epoch=$(( $epoch + 1 ))
 		echo $epoch >${SAVE_DIR}/epoch
 		epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
 		auto_mkdir ${epoch_result_dir} "weak"
 		round=0
-		echo $round >${AIOCC_CONFIG_DIR}/round
+		echo $round >${epoch_result_dir}/round.cfg
 	fi
 }
 
@@ -278,7 +287,7 @@ function benchmark_rule()
     fi
 	
 	#
-	#多次测试得分最高的规则时会遇到这种情况
+	#再次测试得分最高的规则时会遇到这种情况
 	#
 	if [ -f ${AIOCC_RULE_CANDIDATE_DIR}/${candidate_rule} ];then
 		local candidate_rule_to_use=${AIOCC_RULE_CANDIDATE_DIR}/${candidate_rule}		
@@ -287,11 +296,12 @@ function benchmark_rule()
 	fi
 	
     candidate_try=$(( $candidate_try + 1 ))
-    if [ $candidate_try -eq 1 ];then
-        auto_mkdir "${candidate_result_dir}" "force"
-    else
-        auto_mkdir "${candidate_result_dir}/${candidate_try}" "force"
-    fi
+    #if [ $candidate_try -eq 1 ];then
+    #    auto_mkdir "${candidate_result_dir}" "force"
+    #fi
+        
+	auto_mkdir "${candidate_result_dir}/${candidate_try}" "force"
+
     auto_mkdir ${candidate_test_dir} "force"
     sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/_set_qos_rules.sh ${candidate_rule_to_use}"
     
@@ -389,7 +399,7 @@ cd ${AIOCC_RULE_DATABASE_DIR}
 #参数意义：rule
 #rule_num,rules_per_sec ack_ewma_lower,ack_ewma_upper,send_ewma_lower,send_ewma_upper,rtt_ratio100_lower,rtt_ratio100_upper,m100,b100,tau
 #
-if [ -f "${AIOCC_RULE_DATABASE_DIR}/epoch.cfg" ]; then
+if [ -f "${AIOCC_RULE_DATABASE_DIR}/epoch.cfg" -a `ls ${AIOCC_RULE_CANDIDATE_DIR} | wc -l` -gt 0 ]; then
     epoch=`cat ${AIOCC_RULE_DATABASE_DIR}/epoch.cfg`
 else
     epoch=0
