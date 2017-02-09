@@ -36,7 +36,7 @@ def splice_cube(rule, split_points):
                     lower_limit = rule[i * 2]
                     upper_limit = rule[i * 2 + 1]
                     if not lower_limit < split_point and split_point < upper_limit:
-                        split_point = lower_limit + (upper_limit - lower_limit) / 2
+                        split_point = lower_limit + int((upper_limit - lower_limit) / 2)
                     new_rule1.append(lower_limit)
                     new_rule1.append(split_point)
                     new_rule2.append(split_point)
