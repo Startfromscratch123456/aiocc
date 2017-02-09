@@ -16,4 +16,6 @@ for osc_name in ${osc_names[*]}
 do
     lctl set_param osc.${osc_name}.qos_rules="`cat $1`"
 done
+#规则文件$1设置完毕后没有再被保留的必要
+rm -f $1
 

@@ -115,7 +115,7 @@ function __initialize()
 	if [ $(getconf WORD_BIT) = '32' -a $(getconf LONG_BIT) = '64' ] ; then
 		OS_TYPE="X64"
 		#MAX_INT=18446744073709551615
-        MAX_INT=2147483647
+        MAX_INT=18446744073709551615
 	else
 		OS_TYPE="X32"
 		MAX_INT=2147483647
