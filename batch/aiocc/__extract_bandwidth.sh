@@ -17,7 +17,6 @@ if [ ! -f ./__aiocc_init.sh ]; then
 	exit 1
 else
 	source ./__aiocc_init.sh
-	echo 'AIOCC INFO:initialization completed...'
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"

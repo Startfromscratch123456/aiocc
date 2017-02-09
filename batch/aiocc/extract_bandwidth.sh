@@ -17,14 +17,15 @@ if [ ! -f ./__aiocc_init.sh ]; then
 	exit 1
 else
 	source ./__aiocc_init.sh
-	echo 'AIOCC INFO:initialization completed...'
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 #
-#client节点收集本节点的qos_rules到$1
+#获取各个节点的参数信息
 #
+print_message "MULTEXU_INFO" "extracting bandwidth of nodes_client.out..."
+
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__extract_bandwidth.sh $1"
 ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "3" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 read_bandwidth=0
