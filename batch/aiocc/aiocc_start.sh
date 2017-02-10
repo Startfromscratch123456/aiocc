@@ -60,7 +60,7 @@ enable_m=0
 benchmark_failed_times=0
 benchmark_failed_times_limit=10
 #规则优化次数上限
-candidate_try_limitation=5
+candidate_try_limitation=3
 
 #bandwidth最值统计及存储
 max_bandwidth=0
@@ -368,9 +368,9 @@ function get_best_round_score()
     local round_summary_file=$2
 	while [ x"$work_loop" == x"true" ];
 	do
-		local candidate_num=`ls ${AIOCC_RULE_CANDIDATE_DIR} | wc -l`
+		candidate_num=`ls ${AIOCC_RULE_CANDIDATE_DIR} | wc -l`
 		if [ $candidate_num -eq 0 ];then
-			print_message "MULTEXU_WARN" "No calculate rules..."
+			print_message "MULTEXU_INFO" "All calculate rules have been tested..."
 			break
 		fi
 		local candidate_rule=`ls ${AIOCC_RULE_CANDIDATE_DIR} | head -1`
@@ -471,6 +471,11 @@ do
 	auto_mkdir ${epoch_result_dir} "weak"   
     round=`cat ${epoch_result_dir}/round.cfg`
     round_summary_file="${epoch_result_dir}/round_${round}_summary.csv"
+    candidate_num=`ls ${AIOCC_RULE_CANDIDATE_DIR} | wc -l`
+    if [ $candidate_num -eq 0 ];then
+			print_message "MULTEXU_ERROR" "No calculate rules,abnormal program termination..."
+			break
+	fi
     deploy_candidate_rules
     get_best_round_score rt_round_best_score_line $round_summary_file
 	check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}

@@ -41,3 +41,11 @@ function __clear()
 }
 
 __clear
+#计算程序运行的时间
+end_time=$(date +%s%N)
+end_time_ms=${end_time:0:16}
+#scale=6
+time_cost=0
+time_cost=`echo "scale=6;($end_time_ms - $start_time_ms)/1000000" | bc`
+print_message "MULTEXU_INFO" "AIOCC clear process finished..."
+print_message "MULTEXU_INFO" "Total time spent:${time_cost} s"
