@@ -27,7 +27,7 @@ clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 print_message "MULTEXU_INFO" "extracting bandwidth of nodes_client.out..."
 
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__extract_bandwidth.sh $1"
-ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "3" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
+ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "1" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 read_bandwidth=0
 write_bandwidth=0
 bandwidth=0

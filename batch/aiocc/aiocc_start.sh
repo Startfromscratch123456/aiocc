@@ -66,7 +66,7 @@ candidate_try_limitation=5
 max_bandwidth=0
 max_bandwidth_file=
 #var_percentage_threshold的临界值,判断稳定与否
-var_percentage_threshold=100
+var_percentage_threshold=200
 #是否保留旧的测试文件
 keep_old_testfiles=0
 drop_cache=0
@@ -155,7 +155,9 @@ function __cleanup()
 function delete_candidate_rule()
 {
 	local candidate_rule=$1
-	rm -f ${AIOCC_RULE_CANDIDATE_DIR}/$candidate_rule
+    local cmd_var="rm -f ${AIOCC_RULE_CANDIDATE_DIR}/$candidate_rule"
+	`$cmd_var`
+    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="${cmd_var}"
 }
 #
 #检测benchmark是否正常:若正常不做任何操作;不正常程序退出
@@ -257,9 +259,9 @@ function next_round()
 		echo $next_rule_sn > ${next_rule_sn_file}
 		# start a new epoch
 		epoch=$(( $epoch + 1 ))
-		echo $epoch >${SAVE_DIR}/epoch
+		echo $epoch > ${AIOCC_RULE_DATABASE_DIR}/epoch.cfg
 		epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
-		auto_mkdir ${epoch_result_dir} "weak"
+		auto_mkdir ${epoch_result_dir} "force"
 		round=0
 		echo $round >${epoch_result_dir}/round.cfg
 	fi
@@ -277,12 +279,14 @@ function benchmark_rule()
 		old_score_line=`grep "^${candidate_rule}," ${round_summary_file}`
     fi
     if [ x${old_score_line} = x ];then
+        local candidate_old_score=0
         local candidate_avg_bandwidth=0
-        local candidate_avg_var=0
+        local candidate_avg_bandwidth_var=0
         local candidate_try=0
     else
+        local candidate_old_score=`echo ${old_score_line} | cut -d, -f 2`
         local candidate_avg_bandwidth=`echo ${old_score_line} | cut -d, -f 3`
-        local candidate_avg_var=`echo ${old_score_line} | cut -d, -f 4`
+        local candidate_avg_bandwidth_var=`echo ${old_score_line} | cut -d, -f 4`
         local candidate_try=`echo ${old_score_line} | cut -d, -f 5`
     fi
 	
@@ -306,17 +310,34 @@ function benchmark_rule()
     sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/_set_qos_rules.sh ${candidate_rule_to_use}"
     
 	sh ${AIOCC_BATCH_DIR}/gather_qos_rules.sh ${candidate_test_dir}
-	local_check_status "${AIOCC_EXECUTE_STATUS_FINISHED}"  "3" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
+	local_check_status "${AIOCC_EXECUTE_STATUS_FINISHED}"  "1" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 	
     python ${AIOCC_BATCH_DIR}/merge_qos_rule_files.py ${candidate_test_dir} ${candidate_test_dir}/"merged_rule.rule"
 	wait
-	
+    #
+	#注意还要处理benchmark失败的情况返回一个值,get_best_round_score重新测试阶段最优规则时会用到
+    #if [ benchmark_failed ];then
+    #   handle it
+    #   return 2
+    #fi
+    #
     sh ${AIOCC_BATCH_DIR}/extract_bandwidth.sh ${candidate_result_dir}/${candidate_try}
 	local bandwidth=`grep "bandwidth_mean" ${candidate_result_dir}/${candidate_try}/bandwidth.statistic | cut -d: -f 2`
-	if [ "$bandwidth" = "0" ];then
-		print_message "MULTEXU_ECHOX" "1>&2" "Cannot get bandwidth, error"
+	if [ $bandwidth -eq 0 ];then
+		print_message "MULTEXU_ECHOX" "1>&2" "warning:the value of bandwidth is ${bandwidth}..."
+		#print_message "MULTEXU_WARN" "warning:the value of bandwidth is ${bandwidth}..."
 		benchmark_failed_times=$((benchmark_failed_times+1))
-		return
+        #算作本次测试不成功,占用一次candidate_try机会,var_percentage_threshold + 10是为了使得上层检测不通过
+        var_percentage=$(( var_percentage_threshold + 10 ))
+        local score_line="${candidate_rule},${candidate_old_score},${candidate_avg_bandwidth},${candidate_avg_bandwidth_var},${candidate_try}"
+        if [ -f ${round_summary_file} ];then
+            sed -i "s/^${candidate_rule},.*/${score_line}/g" ${round_summary_file}
+        else
+            echo ${score_line} >> ${round_summary_file}	
+        fi
+        eval "$rs='${var_percentage},${candidate_try}'"
+        #失败的情况返回一个值,get_best_round_score重新测试阶段最优规则时会用到
+		return 1
 	else
 		candidate_avg_bandwidth=`echo "${candidate_avg_bandwidth} + ( ${bandwidth} - ${candidate_avg_bandwidth} ) / ${candidate_try} " | bc`
 		if [ ${candidate_avg_bandwidth} -gt ${max_bandwidth} ];then
@@ -325,17 +346,18 @@ function benchmark_rule()
 		fi
 	fi
     local var=`grep "bandwidth_stddev" ${candidate_result_dir}/${candidate_try}/bandwidth.statistic | cut -d: -f 2`
-    candidate_avg_var=`echo "$candidate_avg_var + ( $var - $candidate_avg_var ) / $candidate_try " | bc`
-    #candidate_avg_bandwidth candidate_avg_var objective_model
-    local score=`python ${AIOCC_BATCH_DIR}/calculate_score.py ${candidate_avg_bandwidth} ${candidate_avg_var} "afactor"`
-	#${candidate_rule},${score},${candidate_avg_bandwidth},${candidate_avg_var},${candidate_try}
-    local score_line="${candidate_rule},${score},${candidate_avg_bandwidth},${candidate_avg_var},${candidate_try}"
+    candidate_avg_bandwidth_var=`echo "$candidate_avg_bandwidth_var + ( $var - $candidate_avg_bandwidth_var ) / $candidate_try " | bc`
+    #candidate_avg_bandwidth candidate_avg_bandwidth_var objective_model
+    local score=`python ${AIOCC_BATCH_DIR}/calculate_score.py ${candidate_avg_bandwidth} ${candidate_avg_bandwidth_var} "afactor"`
+	#${candidate_rule},${score},${candidate_avg_bandwidth},${candidate_avg_bandwidth_var},${candidate_try}
+    local score_line="${candidate_rule},${score},${candidate_avg_bandwidth},${candidate_avg_bandwidth_var},${candidate_try}"
     if [ -f ${round_summary_file} ];then
         sed -i "s/^${candidate_rule},.*/${score_line}/g" ${round_summary_file}
     else
         echo ${score_line} >> ${round_summary_file}	
     fi
-	local var_percentage=`echo "$candidate_avg_var / $candidate_avg_bandwidth" | bc`
+    #采用变异系数
+	local var_percentage=`echo "100 * $candidate_avg_bandwidth_var / $candidate_avg_bandwidth" | bc`
     eval "$rs='${var_percentage},${candidate_try}'"
 }
 
@@ -354,18 +376,22 @@ function get_best_round_score()
 		local candidate_rule=`ls ${AIOCC_RULE_CANDIDATE_DIR} | head -1`
 		while true;
 		do
-			benchmark_rule rs ${candidate_rule} ${round_summary_file}
+            local rs_benchmark_rule=""
+			benchmark_rule rs_benchmark_rule ${candidate_rule} ${round_summary_file}
 			check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}
-			local var_percentage=`echo $rs | cut -d, -f 1`
-			local candidate_try=`echo $rs | cut -d, -f 2`
+			local var_percentage=`echo $rs_benchmark_rule | cut -d, -f 1`
+			local candidate_try=`echo $rs_benchmark_rule | cut -d, -f 2`
+            print_message  "MULTEXU_INFO" "rs_benchmark_rule:${rs_benchmark_rule},var_percentage is $var_percentage..."
 			if [ `echo "$var_percentage < $var_percentage_threshold" | bc -l` -eq 1 ];then
 				print_message "MULTEXU_INFO" "Candidate rule ${candidate_rule} is stable enough, proceeding to next rule..."
 				break
 			elif [ ${candidate_try} -gt ${candidate_try_limitation} ];then
 				print_message "MULTEXU_ECHOX" "1>&2"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough, giving up trying this rule, proceeding to next rule..."
+				#print_message  "MULTEXU_INFO"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough, giving up trying this rule, proceeding to next rule..."
 				break
 			fi
-			print_message "MULTEXU_ECHOX" "1>&2" "var_percentage is $var_percentage, too high, trying this rule one more time..."
+			print_message "MULTEXU_ECHOX" "1>&2" "var_percentage is $var_percentage, too high, trying rule ${candidate_rule}  one more time..."
+			#print_message  "MULTEXU_INFO" "var_percentage is $var_percentage, too high, trying rule ${candidate_rule}  one more time..."
 		done #
 		delete_candidate_rule ${candidate_rule} 
 	done #work_loop
@@ -381,8 +407,8 @@ function get_best_round_score()
             return
         fi
 		print_message "MULTEXU_ECHOX" "1>&2" "Re-test best round candidate $candidate_rule"
-        local S
-        if [ ! benchmark_rule S $candidate_rule $round_summary_file ]; then
+        local rs_benchmark_rule=""
+        if [ ! benchmark_rule rs_benchmark_rule $candidate_rule $round_summary_file ]; then
            	check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}
         fi
     done
@@ -401,9 +427,18 @@ cd ${AIOCC_RULE_DATABASE_DIR}
 #
 if [ -f "${AIOCC_RULE_DATABASE_DIR}/epoch.cfg" -a `ls ${AIOCC_RULE_CANDIDATE_DIR} | wc -l` -gt 0 ]; then
     epoch=`cat ${AIOCC_RULE_DATABASE_DIR}/epoch.cfg`
+    epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
+    auto_mkdir ${epoch_result_dir} "weak"
+    if [ ! -f ${epoch_result_dir}/round.cfg ];then
+        echo 0 >  ${epoch_result_dir}/round.cfg
+    fi
 else
     epoch=0
     echo $epoch>${AIOCC_RULE_DATABASE_DIR}/epoch.cfg
+    epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
+    auto_mkdir ${epoch_result_dir} "force"
+    echo 0 >  ${epoch_result_dir}/round.cfg
+    
     if [ ${initial_rule} -eq 0 ]; then
 		:>${AIOCC_RULE_CANDIDATE_DIR}/0
         print_message "MULTEXU_INFO" "Starting Epoch 0 with default rule"
@@ -423,20 +458,17 @@ EOF
         cp ${AIOCC_CONFIG_DIR}/initial.rule ${AIOCC_RULE_CANDIDATE_DIR}/0
     fi
 fi
-epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
-auto_mkdir ${epoch_result_dir} "force"
+
 #run_workloads ${workloads_type}
 echo "true" > ${AIOCC_CONFIG_DIR}/work_loop.cfg
 # main work loop
 work_loop=`cat ${AIOCC_CONFIG_DIR}/work_loop.cfg`
 while [ x"$work_loop" == x"true" ];
 do
+    epoch=`cat ${AIOCC_RULE_DATABASE_DIR}/epoch.cfg`
 	epoch_result_dir=${AIOCC_RULE_DATABASE_DIR}/"epoch_${epoch}"
 	#同一平台上多次学习可以使用auto_mkdir ${epoch_result_dir} "weak",即保留以前的数据信息
-	auto_mkdir ${epoch_result_dir} "weak"
-    if [ ! -f ${epoch_result_dir}/round.cfg ];then
-        echo 0 >  ${epoch_result_dir}/round.cfg
-    fi
+	auto_mkdir ${epoch_result_dir} "weak"   
     round=`cat ${epoch_result_dir}/round.cfg`
     round_summary_file="${epoch_result_dir}/round_${round}_summary.csv"
     deploy_candidate_rules

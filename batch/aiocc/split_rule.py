@@ -67,6 +67,8 @@ b100_lower_limit = -b100_upper_limit
 
 rule_no = 0
 rules = []
+busiest_rule = []
+busiest_rule_id = -1
 busiest_rule_used_times = 0
 row_id = 0
 

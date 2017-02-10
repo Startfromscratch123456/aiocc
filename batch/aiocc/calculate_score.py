@@ -7,10 +7,10 @@
 #
 import sys
 
-candidate_avg_bw = float(sys.argv[1])
-candidate_avg_var = float(sys.argv[2])
+candidate_avg_bandwidth = float(sys.argv[1])
+candidate_avg_bandwidth_var = float(sys.argv[2])
 afactor = 0.5
-k = 2
+k = 38
 objective_model = str(sys.argv[3])
 
 
@@ -18,7 +18,7 @@ objective_model = str(sys.argv[3])
 # To reflect the variance in the score, we can multiply var
 # by a factor  and add it to tp:
 def afactor_score():
-    score = candidate_avg_bw - afactor * candidate_avg_var
+    score = candidate_avg_bandwidth - afactor * candidate_avg_bandwidth_var
     if score > 0:
         return score
     return 0
@@ -29,8 +29,8 @@ def afactor_score():
 # the coefficient of variation (CV), which is calculated as
 # k = var/tp.
 def cv_score():
-    if candidate_avg_var * 1.0 / candidate_avg_bw < k:
-        return candidate_avg_bw
+    if candidate_avg_bandwidth_var * 1.0 / candidate_avg_bandwidth * 100.0 < k:
+        return candidate_avg_bandwidth
     return 0
 
 

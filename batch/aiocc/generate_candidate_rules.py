@@ -49,13 +49,15 @@ fields = []
 mrif_upper_limit = 30
 b100_upper_limit = mrif_upper_limit * 20 * 100 / 256
 b100_lower_limit = -b100_upper_limit
-fields.append(dict(name="m100", column_index=6, lower_limit=1, upper_limit=200, delta_gran=5, exhaust_search_step=4))
+fields.append(dict(name="m100", column_index=6, lower_limit=mrif_upper_limit, upper_limit=200, delta_gran=5, exhaust_search_step=4))
 fields.append(dict(name="b100", column_index=7, lower_limit=b100_lower_limit, upper_limit=b100_upper_limit, delta_gran=30,
                    exhaust_search_step=4))
 fields.append(dict(name="tau", column_index=8, lower_limit=0, upper_limit=70000, delta_gran=500, exhaust_search_step=6))
 
 rule_no = 0
 rules = []
+busiest_rule = []
+busiest_rule_id = -1
 busiest_rule_used_times = 0
 row_index = 0
 

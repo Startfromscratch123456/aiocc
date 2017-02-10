@@ -17,5 +17,6 @@ do
     lctl set_param osc.${osc_name}.qos_rules="`cat $1`"
 done
 #规则文件$1设置完毕后没有再被保留的必要
-rm -f $1
+#改由在aiocc_start.sh中由函数delete_candidate_rule清理
+#rm -f $1 
 

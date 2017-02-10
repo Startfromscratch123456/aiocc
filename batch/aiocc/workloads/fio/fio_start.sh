@@ -37,12 +37,12 @@ allow_mounted_write=1
 ioengine="sync"
 special_cmd="-rwmixread=50" #随机IO时的一些特殊参数
 size="512M"
-numjobs=4
-runtime=30
+numjobs=15
+runtime=120
 name="aiocc_fio_workloads"
 
 blocksize_start=1
-blocksize_end=16
+blocksize_end=1024
 blocksize_multi_step=2
 #设置检测测试是否结束的时间以及检测的下限
 checktime_init=60
