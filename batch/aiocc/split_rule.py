@@ -50,7 +50,6 @@ def splice_cube(rule, split_points):
         ret = new_rules
     return ret
 
-
 def write_rule(f, rule):
     s = ""
     for col_id in range(output_col_range):

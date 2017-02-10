@@ -61,7 +61,6 @@ busiest_rule_id = -1
 busiest_rule_used_times = 0
 row_index = 0
 
-
 def write_rule_file():
     global next_rule_sequence
     global rules
@@ -88,7 +87,6 @@ def write_rule_file():
                 s += str(col)
         print(s, file=f)
         row_index += 1
-
 
 # read in current rules
 #best rules summary file
@@ -124,7 +122,6 @@ if working_on_rule != -1:
 else:
     working_on_rule = busiest_rule_id
     rule_to_tweak = list(busiest_rule)
-
 
 def gen_rules_using_field(field_id):
     if field_id >= len(fields):

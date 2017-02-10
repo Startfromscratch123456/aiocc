@@ -127,8 +127,7 @@ function __initialize()
 		max_bandwidth=`cat $max_bandwidth_file`
 	else
 		echo $max_bandwidth > $max_bandwidth_file
-	fi
-		
+	fi		
 	clear_execute_statu_signal ${AIOCC_CTROL_SIGNAL_FILE}
 }
 #
@@ -381,7 +380,6 @@ function get_best_round_score()
 			check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}
 			local var_percentage=`echo $rs_benchmark_rule | cut -d, -f 1`
 			local candidate_try=`echo $rs_benchmark_rule | cut -d, -f 2`
-            print_message  "MULTEXU_INFO" "rs_benchmark_rule:${rs_benchmark_rule},var_percentage is $var_percentage..."
 			if [ `echo "$var_percentage < $var_percentage_threshold" | bc -l` -eq 1 ];then
 				print_message "MULTEXU_INFO" "Candidate rule ${candidate_rule} is stable enough, proceeding to next rule..."
 				break
@@ -390,7 +388,7 @@ function get_best_round_score()
 				#print_message  "MULTEXU_INFO"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough, giving up trying this rule, proceeding to next rule..."
 				break
 			fi
-			print_message "MULTEXU_ECHOX" "1>&2" "var_percentage is $var_percentage, too high, trying rule ${candidate_rule}  one more time..."
+			print_message "MULTEXU_ECHOX" "1>&2" "var_percentage is $var_percentage, too high, trying rule ${candidate_rule} one more time..."
 			#print_message  "MULTEXU_INFO" "var_percentage is $var_percentage, too high, trying rule ${candidate_rule}  one more time..."
 		done #
 		delete_candidate_rule ${candidate_rule} 
@@ -418,7 +416,7 @@ function get_best_round_score()
 #										开始AIOCC											
 #############################################################################################
 print_message "MULTEXU_INFO" "Now start AIOCC ..."
-print_message "MULTEXU_INFO" "Entering directory ${AIOCC_RULE_DATABASE_DIR}..."
+print_message "MULTEXU_INFO" "Entering directory ${AIOCC_RULE_DATABASE_DIR} ..."
 __initialize
 cd ${AIOCC_RULE_DATABASE_DIR}
 #
