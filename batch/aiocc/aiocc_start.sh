@@ -56,6 +56,10 @@ category="default"
 workloads_type=
 #控制参数<m,b,t>中的m
 enable_m=0
+#是否显示输出日志
+#根据quiet决定是否将运行中的日志输出到/dev/null,涉及到:scp分发/收集rule scp收集bandwidth统计信息
+quiet=0
+
 #benchmark失败次数统计以及上限设定
 benchmark_failed_times=0
 benchmark_failed_times_limit=10
@@ -89,6 +93,10 @@ do
             ;;
 		--workloads_type=?*)
             workloads_type=${1#*=}
+            shift
+            ;;
+        --quiet=?*)
+            quiet=${1#*=}
             shift
             ;;
 		-?*)
@@ -127,7 +135,8 @@ function __initialize()
 		max_bandwidth=`cat $max_bandwidth_file`
 	else
 		echo $max_bandwidth > $max_bandwidth_file
-	fi		
+	fi
+    
 	clear_execute_statu_signal ${AIOCC_CTROL_SIGNAL_FILE}
 }
 #
@@ -176,7 +185,11 @@ function check_benchmark()
 #
 function deploy_candidate_rules()
 {
-    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --sendfile="${AIOCC_RULE_CANDIDATE_DIR}/*" --location="${AIOCC_RULE_CANDIDATE_DIR}"
+    if [ ${quiet} -eq 1 ];then
+        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --sendfile="${AIOCC_RULE_CANDIDATE_DIR}/*" --location="${AIOCC_RULE_CANDIDATE_DIR}" >/dev/null
+    else
+        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --sendfile="${AIOCC_RULE_CANDIDATE_DIR}/*" --location="${AIOCC_RULE_CANDIDATE_DIR}"
+    fi
 }
 
 function run_workloads()
@@ -207,6 +220,23 @@ _get_rule_of_scoreline() {
 _get_score_of_scoreline() {
     local score_line=$1
     echo `echo "$score_line" | cut -d',' -f 2`
+}
+
+#
+#过滤不完整的规则文件
+#$1候选规则存储目录
+#
+function _candidate_filter(){
+    for candidate in $( ls $1 )
+    do
+        local rule_no=`head -1  $1/${candidate} | cut -d , -f 1`
+        local rule_file_lines=` wc -l $1/${candidate} | cut -d ' ' -f 1`
+        rule_file_lines=`echo "${rule_file_lines} - 1" | bc`
+        if [ ${rule_no} -ne ${rule_file_lines} ];then
+            print_message "MULTEXU_WARN" "File format error:rule ${candidate},it will be discarded ..."
+            rm -f $1/${candidate}
+        fi
+    done
 }
 
 function next_round()
@@ -306,9 +336,10 @@ function benchmark_rule()
 	auto_mkdir "${candidate_result_dir}/${candidate_try}" "force"
 
     auto_mkdir ${candidate_test_dir} "force"
-    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/_set_qos_rules.sh ${candidate_rule_to_use}"
-    
-	sh ${AIOCC_BATCH_DIR}/gather_qos_rules.sh ${candidate_test_dir}
+    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/_set_qos_rules.sh ${candidate_rule_to_use} ${quiet}" 
+    print_message "MULTEXU_INFO" "using rule ${candidate_rule_to_use} ..."
+    cat ${candidate_rule_to_use}
+	sh ${AIOCC_BATCH_DIR}/gather_qos_rules.sh ${candidate_test_dir} ${quiet}
 	local_check_status "${AIOCC_EXECUTE_STATUS_FINISHED}"  "1" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 	
     python ${AIOCC_BATCH_DIR}/merge_qos_rule_files.py ${candidate_test_dir} ${candidate_test_dir}/"merged_rule.rule"
@@ -320,7 +351,7 @@ function benchmark_rule()
     #   return 2
     #fi
     #
-    sh ${AIOCC_BATCH_DIR}/extract_bandwidth.sh ${candidate_result_dir}/${candidate_try}
+    sh ${AIOCC_BATCH_DIR}/extract_bandwidth.sh ${candidate_result_dir}/${candidate_try} ${quiet}
 	local bandwidth=`grep "bandwidth_mean" ${candidate_result_dir}/${candidate_try}/bandwidth.statistic | cut -d: -f 2`
 	if [ $bandwidth -eq 0 ];then
 		print_message "MULTEXU_ECHOX" "1>&2" "warning:the value of bandwidth is ${bandwidth}..."
@@ -381,10 +412,10 @@ function get_best_round_score()
 			local var_percentage=`echo $rs_benchmark_rule | cut -d, -f 1`
 			local candidate_try=`echo $rs_benchmark_rule | cut -d, -f 2`
 			if [ `echo "$var_percentage < $var_percentage_threshold" | bc -l` -eq 1 ];then
-				print_message "MULTEXU_INFO" "Candidate rule ${candidate_rule} is stable enough, proceeding to next rule..."
+				print_message "MULTEXU_INFO" "Candidate rule ${candidate_rule} is stable enough:var_percentage ${var_percentage}, proceeding to next rule..."
 				break
 			elif [ ${candidate_try} -gt ${candidate_try_limitation} ];then
-				print_message "MULTEXU_ECHOX" "1>&2"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough, giving up trying this rule, proceeding to next rule..."
+				print_message "MULTEXU_ECHOX" "1>&2"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough:var_percentage ${var_percentage}, giving up trying this rule, proceeding to next rule..."
 				#print_message  "MULTEXU_INFO"  "AIOCC has tried rule $candidate_rule $candidate_try times,and still not stable enough, giving up trying this rule, proceeding to next rule..."
 				break
 			fi
@@ -478,6 +509,7 @@ do
     get_best_round_score rt_round_best_score_line $round_summary_file
 	check_benchmark ${benchmark_failed_times} ${benchmark_failed_times_limit}
     next_round ${rt_round_best_score_line}
+    _candidate_filter ${AIOCC_RULE_CANDIDATE_DIR}
 done # epoch loop
 
 __cleanup

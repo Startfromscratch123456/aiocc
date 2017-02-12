@@ -15,6 +15,7 @@ rule_file_suffix = ".rule"
 rules = []
 global rule_no
 global row_index
+global mrif_update_rate
 is_first_file = True
 qos_rule_files = os.listdir(qos_rule_files_dir)
 

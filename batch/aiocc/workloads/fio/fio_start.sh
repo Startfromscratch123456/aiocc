@@ -37,7 +37,7 @@ allow_mounted_write=1
 ioengine="sync"
 special_cmd="-rwmixread=50" #随机IO时的一些特殊参数
 size="512M"
-numjobs=15
+numjobs=8
 runtime=120
 name="aiocc_fio_workloads"
 
@@ -45,13 +45,13 @@ blocksize_start=1
 blocksize_end=1024
 blocksize_multi_step=2
 #设置检测测试是否结束的时间以及检测的下限
-checktime_init=60
+checktime_init=120
 checktime_lower_limit=10
 #IO方式
 declare -a rw_array;#Type of I/O pattern. 
 
 #fio的读写方式
-rw_array=("randrw" "readwrite" "write" "randwrite" "read" "randread")
+rw_array=("randrw" "readwrite" "write" "randwrite" "read" "randread" "randrw" "readwrite" "write" "randwrite" "read" "randread" "randrw" "readwrite" "write" "randwrite" "read" "randread")
 #获取客户端的ip地址,只需要其中一个即可,用作向服务器发命令,清除测试产生的文件
 client_ip=`cat ${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out | head -1`
 
@@ -169,7 +169,8 @@ do
 		touch "${dirname}/${filename}"
 		echo "${cmdvar}" > ${dirname}/${filename}
 		#测试结果写入文件
-		sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh ${AIOCC_BATCH_DIR}/${relative_path}/_test_exe.sh \"${cmdvar}\" " >> ${dirname}/${filename}
+		#sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh ${AIOCC_BATCH_DIR}/${relative_path}/_test_exe.sh \"${cmdvar}\" " >> ${dirname}/${filename}
+		sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh ${AIOCC_BATCH_DIR}/${relative_path}/_test_exe.sh \"${cmdvar}\" " >/dev/null
 		#检测测试是否完成
 		ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
 		#清除标记

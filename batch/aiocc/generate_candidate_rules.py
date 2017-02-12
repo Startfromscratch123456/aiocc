@@ -49,16 +49,15 @@ fields = []
 mrif_upper_limit = 30
 b100_upper_limit = mrif_upper_limit * 20 * 100 / 256
 b100_lower_limit = -b100_upper_limit
-fields.append(dict(name="m100", column_index=6, lower_limit=mrif_upper_limit, upper_limit=200, delta_gran=5, exhaust_search_step=4))
-fields.append(dict(name="b100", column_index=7, lower_limit=b100_lower_limit, upper_limit=b100_upper_limit, delta_gran=30,
-                   exhaust_search_step=4))
-fields.append(dict(name="tau", column_index=8, lower_limit=0, upper_limit=70000, delta_gran=500, exhaust_search_step=6))
+fields.append(dict(name="m100", column_index=6, lower_limit=mrif_upper_limit, upper_limit=200, delta_granularity=5, exhaust_search_step=4))
+fields.append(dict(name="b100", column_index=7, lower_limit=b100_lower_limit, upper_limit=b100_upper_limit, delta_granularity=30, exhaust_search_step=4))
+fields.append(dict(name="tau", column_index=8, lower_limit=0, upper_limit=70000, delta_granularity=500, exhaust_search_step=6))
 
 rule_no = 0
 rules = []
 busiest_rule = []
 busiest_rule_id = -1
-busiest_rule_used_times = 0
+busiest_rule_used_times = -1
 row_index = 0
 
 def write_rule_file():
@@ -134,9 +133,9 @@ def gen_rules_using_field(field_id):
 
     b = field['upper_limit']
     a = field['lower_limit']
-    gran = field['delta_gran']
+    granularity = field['delta_granularity']
     step = field['exhaust_search_step']
-    scale_factor = pow(float(b - a) / gran, 1.0 / step)
+    scale_factor = pow(float(b - a) / granularity, 1.0 / step)
     if debug >= 1:
         print("scale_factor: %f" % (scale_factor))
     init_val = rules[working_on_rule][field['column_index']]
@@ -149,7 +148,7 @@ def gen_rules_using_field(field_id):
 
     test_range = max(b - init_val, init_val - a, 0)
 
-    delta = gran
+    delta = granularity
     while delta <= test_range:
         if debug >= 1:
             print("Field %s delta: %f" % (field['name'], delta))

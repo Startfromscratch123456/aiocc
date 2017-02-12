@@ -25,12 +25,12 @@ clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 LUSTRE_PROC_OSC="/proc/fs/lustre/osc"
 #注意是数组
 OSC_ARRAY=($(ls ${LUSTRE_PROC_OSC}))
-
-rm -f $1/*.import
-auto_mkdir $1 "force"
+local_import_file_dir=$1
+rm -f ${local_import_file_dir}/*.import
+auto_mkdir ${local_import_file_dir} "force"
 
 for OSC in ${OSC_ARRAY[*]}
 do
-	cp ${LUSTRE_PROC_OSC}/${OSC}/import $1/${HOSTNAME}_${OSC}.import
+	cp ${LUSTRE_PROC_OSC}/${OSC}/import ${local_import_file_dir}/${HOSTNAME}_${OSC}.import
 done
 send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"

@@ -22,21 +22,31 @@ fi
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 clear_execute_statu_signal "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
+candidate_test_dir=$1
+quiet=$2
 #
-#client节点收集本节点的qos_rules到$1
+#client节点收集本节点的qos_rules到${candidate_test_dir}
 #
 print_message "MULTEXU_INFO" "gathering qos rules from nodes_client.out..."
-sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__gather_qos_rules.sh $1"
+sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${AIOCC_BATCH_DIR}/__gather_qos_rules.sh ${candidate_test_dir}"
 ssh_check_cluster_status "nodes_client.out" "${AIOCC_EXECUTE_STATUS_FINISHED}" "1" "1" "${AIOCC_EXECUTE_SIGNAL_FILE}"
-rm -f $1/*.rule
-auto_mkdir $1 "force"
+rm -f ${candidate_test_dir}/*.rule
+auto_mkdir ${candidate_test_dir} "force"
+
 #
-#复制各节点$1目录下的qos_rules文件到当前节点的$1目录下
+#复制各节点${candidate_test_dir}目录下的qos_rules文件到当前节点的${candidate_test_dir}目录下
 #
-for host_ip in $(cat "${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out")
-do 
-	scp root@${host_ip}:$1/*.rule $1/
-done
+if [ ${quiet} -eq 1 ];then
+    for host_ip in $(cat "${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out")
+    do 
+        scp root@${host_ip}:${candidate_test_dir}/*.rule ${candidate_test_dir}/ >/dev/null
+    done
+else
+   for host_ip in $(cat "${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out")
+   do 
+        scp root@${host_ip}:${candidate_test_dir}/*.rule ${candidate_test_dir}/
+   done
+fi
 
 send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"
 
