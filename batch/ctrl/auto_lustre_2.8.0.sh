@@ -19,12 +19,12 @@ start_time_ms=${start_time:0:16}
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f __init.sh ]; then
-	echo "MULTEXU Error:initialization failure:cannot find the file __init.sh... "
-	exit 1
+    echo "MULTEXU Error:initialization failure:cannot find the file __init.sh... "
+    exit 1
 else
-	source ./__init.sh
-	echo 'MULTEXU INFO:initialization completed...'
-	`${PAUSE_CMD}`
+    source ./__init.sh
+    echo 'MULTEXU INFO:initialization completed...'
+    `${PAUSE_CMD}`
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
@@ -90,14 +90,14 @@ do
             install_lmt=${1#*=}
             shift
             ;;
-		-?*)
+        -?*)
             printf 'WARN: Unknown option (ignored): %s\n' "(" >&2")"
             shift
             ;;
-		*)	# Default case: If no more options then break out of the loop.
-			shift
-			break
-	esac		
+        *)    # Default case: If no more options then break out of the loop.
+            shift
+            break
+    esac        
 done
 #
 #centos7.0-c1-centos7.0-c7是lustre文件系统测试节点,其中lustre适配的新内核已经安装完毕,如需要安装新内核,修改相关参数
@@ -298,9 +298,9 @@ sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal
 sh ${MULTEXU_BATCH_DEPLOY_DIR}/auto_lustre2.8.0_deploy.sh --mdsnode=${mdsnode} --devname=${devname} --devindex=${devindex}
 #等待部署完成
 while [[ $(cat ${EXECUTE_STATUS_SIGNAL}) != "${MULTEXU_STATUS_EXECUTE}" ]];
-	do
-		print_message "MULTEXU_INFO" "the current node is executing auto_lustre2.8.0_deploy.sh..."
-		sleep ${sleeptime}s
+    do
+        print_message "MULTEXU_INFO" "the current node is executing auto_lustre2.8.0_deploy.sh..."
+        sleep ${sleeptime}s
 done
 print_message "MULTEXU_INFO" "the current node finished to execute auto_lustre2.8.0_deploy.sh..."
 

@@ -135,40 +135,40 @@ print_message "MULTEXU_INFO" "the script clear_var_log_messages.sh is running in
 print_message "MULTEXU_INFO" "now start the test processes..."
 for policy in ${policy_name[*]}
 do
-	#修改调度器 并显示修改后的调度器名称  注意调度器实际命令需要引号 故传入的参数需要转义
+    #修改调度器 并显示修改后的调度器名称  注意调度器实际命令需要引号 故传入的参数需要转义
     sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_oss.out --supercmd="lctl set_param ost.OSS.ost_io.nrs_policies=\"${policy/-/ }\""
-	print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
+    print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
     for rw_pattern in ${rw_array[*]}
     do
         #测试结果的存放目录
-		dirname="${result_dir}/${rw_pattern}"
-		auto_mkdir "${dirname}" "weak"
-		
-		print_message "MULTEXU_ECHO" "	rw_array:${rw_pattern}"
+        dirname="${result_dir}/${rw_pattern}"
+        auto_mkdir "${dirname}" "weak"
+        
+        print_message "MULTEXU_ECHO" "    rw_array:${rw_pattern}"
         for ((blocksize=${blocksize_start} ;blocksize <= ${blocksize_end}; blocksize*=${blocksize_multi_step}))
         do
             if [ x`$EXIT_SIGNAL` = x"EXIT" ];then
-				print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
-				exit 0
-			fi
-			print_message "MULTEXU_ECHO" "		start a test..."   
-			
+                print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
+                exit 0
+            fi
+            print_message "MULTEXU_ECHO" "        start a test..."   
+            
             special_cmd_io_choice=
-			
+            
             if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
                 special_cmd_io_choice=${special_cmd}
             fi
 
             cmdvar="${MULTEXU_SOURCE_TOOL_DIR}/fio/fio -directory=${directory} -direct=${direct} -iodepth ${iodepth} -thread -rw=${rw_pattern} ${special_cmd_io_choice} -allow_mounted_write=${allow_mounted_write} -ioengine=${ioengine} -bs=${blocksize}k -size=${size} -numjobs=${numjobs} -runtime=${runtime} -group_reporting -name=${name} "
-            print_message "MULTEXU_ECHO" "		test command:${cmdvar}"
+            print_message "MULTEXU_ECHO" "        test command:${cmdvar}"
             #删除测试文件
             sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -f ${directory}/*"
-			
-			####时间同步
+            
+            ####时间同步
             sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="rdate -s ${time_syn_clock}"
-			####
-			
-			sleep ${sleeptime}s
+            ####
+            
+            sleep ${sleeptime}s
             #测试结果文件名称,组成方式:读写模式-调度器-块大小-k.txt
             filename="${rw_pattern}-${policy}-${blocksize}-k.txt"
             touch "${dirname}/${filename}"
@@ -180,7 +180,7 @@ do
             ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
             #清除标记
             sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"            
-            print_message "MULTEXU_ECHO" "		finish this test..."
+            print_message "MULTEXU_ECHO" "        finish this test..."
             `${PAUSE_CMD}`
         done #blocksize
     done #rw_pattern

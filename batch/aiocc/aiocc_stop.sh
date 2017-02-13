@@ -13,12 +13,12 @@
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f ./__aiocc_init.sh ]; then
-	echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
-	exit 1
+    echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
+    exit 1
 else
-	source ./__aiocc_init.sh
-	echo 'AIOCC INFO:initialization completed...'
-	`${PAUSE_CMD}`
+    source ./__aiocc_init.sh
+    echo 'AIOCC INFO:initialization completed...'
+    `${PAUSE_CMD}`
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"

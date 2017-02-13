@@ -13,16 +13,16 @@
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f ../ctrl/__init.sh ]; then
-	echo "MULTEXU Error:initialization failure:cannot find the file __init.sh... "
-	exit 1
+    echo "MULTEXU Error:initialization failure:cannot find the file __init.sh... "
+    exit 1
 else
-	source ../ctrl/__init.sh
+    source ../ctrl/__init.sh
 fi
 
 #
-#	分布式文件系统自动I/O拥塞控制
-#	distributed filesystem automatic I/O congestion control
-#	AIOCC
+#    分布式文件系统自动I/O拥塞控制
+#    distributed filesystem automatic I/O congestion control
+#    AIOCC
 #
 #__aiocc_init()
 #

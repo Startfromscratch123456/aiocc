@@ -13,10 +13,10 @@
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f ./__aiocc_init.sh ]; then
-	echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
-	exit 1
+    echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
+    exit 1
 else
-	source ./__aiocc_init.sh
+    source ./__aiocc_init.sh
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
@@ -31,6 +31,6 @@ auto_mkdir ${local_import_file_dir} "force"
 
 for OSC in ${OSC_ARRAY[*]}
 do
-	cp ${LUSTRE_PROC_OSC}/${OSC}/import ${local_import_file_dir}/${HOSTNAME}_${OSC}.import
+    cp ${LUSTRE_PROC_OSC}/${OSC}/import ${local_import_file_dir}/${HOSTNAME}_${OSC}.import
 done
 send_execute_statu_signal "${AIOCC_EXECUTE_STATUS_FINISHED}" "${AIOCC_EXECUTE_SIGNAL_FILE}"

@@ -22,11 +22,11 @@ start_time_ms=${start_time:0:16}
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f ./__aiocc_init.sh ]; then
-	echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
-	exit 1
+    echo "AIOCC Error:initialization failure:cannot find the file __aiocc_init.sh... "
+    exit 1
 else
-	source ./__aiocc_init.sh
-	echo 'AIOCC INFO:initialization completed...'
+    source ./__aiocc_init.sh
+    echo 'AIOCC INFO:initialization completed...'
 fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
@@ -36,7 +36,7 @@ clear_execute_statu_signal ${AIOCC_EXECUTE_SIGNAL_FILE}
 function __clear()
 {
     local cmd_var="sh ${AIOCC_BATCH_DIR}/_aiocc_clear.sh"
-	`$cmd_var`
+    `$cmd_var`
     sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="${cmd_var}"
 }
 

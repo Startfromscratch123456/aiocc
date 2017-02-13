@@ -43,14 +43,14 @@ do
             skip_install_dependency=${1#*=}
             shift
             ;;
-		-?*)
+        -?*)
             printf 'WARN: Unknown option (ignored): %s\n' "(" >&2")"
             shift
             ;;
-		*)	# Default case: If no more options then break out of the loop.
-			shift
-			break
-	esac		
+        *)    # Default case: If no more options then break out of the loop.
+            shift
+            break
+    esac        
 done
 
 if [ ${skip_install_dependency} -eq 0 ];then 

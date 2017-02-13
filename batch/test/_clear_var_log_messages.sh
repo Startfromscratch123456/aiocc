@@ -19,13 +19,13 @@ source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 
 VAR_LOG_DIR="/var/log"
 if [ ! -f ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg ];then
-	echo "false" > ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg
+    echo "false" > ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg
 fi
 
 START_SIGNAL="cat  ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg"
 if [ x`$START_SIGNAL` = x"true" ];then
-	print_message "MULTEXU_INFO" "_clear_var_log_messages.sh is runing,no need to run it again..."
-	exit 0
+    print_message "MULTEXU_INFO" "_clear_var_log_messages.sh is runing,no need to run it again..."
+    exit 0
 fi
 echo "true" >  ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg
 while [ x`$START_SIGNAL` = x"true" ]

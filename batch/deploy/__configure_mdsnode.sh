@@ -29,19 +29,19 @@ mnt_position=
 #获取参数
 #
 while getopts 'd:i:m:' opt;do
-	case $opt in
-		d)
-			devname=$OPTARG;;
-		i)
-			index=$OPTARG;;
-		m)
-			mnt_position=$OPTARG;;
-	esac
+    case $opt in
+        d)
+            devname=$OPTARG;;
+        i)
+            index=$OPTARG;;
+        m)
+            mnt_position=$OPTARG;;
+    esac
 done
 
 if [ ! -n ${devname} ] || [ ! -n ${index} ] || [ ! -n ${mnt_position} ]; then
-	print_message "MULTEXU_ERROR" "-d|-i|-m is necessary..."
-	exit 1
+    print_message "MULTEXU_ERROR" "-d|-i|-m is necessary..."
+    exit 1
 fi
 
 #
