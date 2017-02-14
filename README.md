@@ -25,7 +25,7 @@
 
 #AIOCC架构
 
-![image](https://github.com/ShijunDeng/LustreTools/blob/master/source/image/architecture_aiocc.jpg)
+![image](https://github.com/ShijunDeng/LustreTools/blob/master/source/image/architecture_aiocc.png)
 
 **AIOCC说明**
 
