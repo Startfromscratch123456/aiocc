@@ -25,11 +25,11 @@
 
 #AIOCC架构
 
-![image](https://github.com/ShijunDeng/LustreTools/blob/master/source/image/architecture_aiocc.png)
+![image](https://github.com/ShijunDeng/LustreTools/blob/master/source/image/architecture_aiocc.jpg)
 
 **AIOCC说明**
 
-AIOCC说明是在Lustre2.8+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)基础上开发的。AIOCC说明针对的是CentOS7（Linux kernel 3.10.0-327.el7.x86_64）和Lustre2.8.0，其它版本的系统使用本工具可能需要解决一些兼容性问题。另外，CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.8.0全套安装文件。
+AIOCC说明是在Lustre2.8+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)、[ASCAR](https://github.com/mlogic/ascar-lustre-sharp)基础上开发的。AIOCC说明针对的是CentOS7（Linux kernel 3.10.0-327.el7.x86_64）和Lustre2.8.0，其它版本的系统使用本工具可能需要解决一些兼容性问题。另外，CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.8.0全套安装文件。
 ## 反馈与建议
 - QQ：946057490
 - 邮箱：<dengshijun1992@gmail.com> <SjDeng@hust.edu.cn>
