@@ -1,4 +1,13 @@
-# Automatic I/O congestion control(AIOCC)
+Automatic I/O congestion control(AIOCC)
+=========================
+[![TeamCity CodeBetter](https://img.shields.io/teamcity/codebetter/bt428.svg?maxAge=2592000)]()
+[![Packagist](https://img.shields.io/packagist/v/symfony/symfony.svg?maxAge=2592000)]()
+[![Yii2](https://img.shields.io/badge/Powered_by-multexu Framework-green.svg?style=flat)]()
+![Progress](http://progressed.io/bar/80?title=completed )
+
+
+#[AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
+
 在HPC存储系统和云存储系统中，为了实现高性能和高并行，一个I/O操作通常被分割为若干个请求序列，同时将这些请求发送到服务器端，导致存储系统中涌现大量资源竞争，如存储带宽。HPC存储系统和云存储系统中，通常会有成百上千个客户端，运行各类应用，每个应用会发送一定数量的I/O请求。因此存储系统中会充斥着大量的请求，资源竞争十分激烈。
 
 传统的方案多为局部优化，如优化数据在磁盘上的分布、网络拥塞控制、路由选择等方案，并不能有效应对分布式文件系统中负载压力较大时，对有限的资源（如带宽、磁盘访问时间片等）的竞争问题。这些竞争会大大降低存储系统效率，例如：争夺网络带宽会导致网络丢包、超时以及非预期的中断连接；在服务端争夺存储器资源会降低缓存效率、增加存储器访问时延，基于闪存的存储系统还可能导致写放大的问题。如果存储系统缺乏对这些竞争的管控，一旦负载压力过大时，整个系统的效率将大大下降，甚至可能崩溃。因此在分布式文件系统中，设计一种I/O拥塞控制机制来协调和控制系统的I/O访问，保证系统高效运行就显得尤为重要。
@@ -32,7 +41,7 @@
 AIOCC说明是在Lustre2.8+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)、[ASCAR](https://github.com/mlogic/ascar-lustre-sharp)基础上开发的。AIOCC针对的是CentOS7（Linux kernel 3.10.0-327.el7.x86_64）和Lustre2.8.0，其它版本的系统使用本工具可能需要解决一些兼容性问题。另外，CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.8.0全套安装文件。
 ## 反馈与建议
 - QQ：946057490
-- 邮箱：<dengshijun1992@gmail.com> <SjDeng@hust.edu.cn>
+- 邮箱：<dengshijun1992@gmail.com> <sjdeng@hust.edu.cn>
 
 ---------
 感谢您阅读这份帮助文档。
