@@ -68,14 +68,33 @@ function upper_round()
     fi
     eval "$3=$re"
 }
+#参数选项
+while :;
+do
+    case $1 in
+        --range=?*)
+            range_limit=${1#*=}
+            shift
+            ;;
+        -?*)
+            printf 'WARN: Unknown option (ignored): %s\n' "(" >&2")"
+            shift
+            ;;
+        *)    # Default case: If no more options then break out of the loop.
+            shift
+            break
+    esac        
+done
 
-
-#分发源文件到各个计算节点
 iptable_file="nodes_compute.out"
-range_limit=65536
+#验证范围
+start_index=1
+if [ "x$range_limit" = "x" ]; then
+    range_limit=65536
+fi
 tencent2017_interview_dir="${MULTEXU_BATCH_DIR}/tmp"
 auto_mkdir "${tencent2017_interview_dir}/result" "force"
-
+#分发源文件到各个计算节点
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="rm -f ${tencent2017_interview_dir}/tencent2017_interview*"
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --sendfile="${tencent2017_interview_dir}/tencent2017_interview.c" --location="${tencent2017_interview_dir}/" 
 
@@ -87,11 +106,12 @@ sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="mkdir $
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="cd ${tencent2017_interview_dir}/ && gcc tencent2017_interview.c -o tencent2017_interview -lpthread"
 #计算计算节点的个数,以分配计算任务
 nodes_num=`wc -l ${MULTEXU_BATCH_CONFIG_DIR}/${iptable_file} | cut -d ' ' -f 1`
-start_index=65530
 low=${start_index}
 high=1
-distance=$(( ${range_limit}-${low} ))
 step=1
+#总的计算范围
+distance=$(( ${range_limit}-${low} ))
+#向上取整
 upper_round ${distance} ${nodes_num} step
 #step=`echo "( $range_limit - $low ) / $nodes_num" | bc`
 index=0
@@ -115,9 +135,11 @@ do
     high=$(( ${low}+${step} ))
     #在某个节点上进行[low, high]范围内的最外层循环
     ssh -f "${ip_table_array[${index}]}" "cd ${tencent2017_interview_dir}/ && ./tencent2017_interview Q1 ${low} ${high}"
-    print_message "MULTEXU_INFO" "${ip_table_array[${index}]} execute range[${low}, ${high}]..."    
+    sleep 1s
+    print_message "MULTEXU_INFO" "${ip_table_array[${index}]} execute range[${low}, ${high}]..."   
+    wait       
     low=${high}
-    (( index += 1 ))
+    index=$(((${index}+1)%${nodes_num}))
 done
 signal_file="${tencent2017_interview_dir}/result/Q1*"
 #检测任务完成状态,检测到任意一个节点输出的解的个数大于0,就停止检测

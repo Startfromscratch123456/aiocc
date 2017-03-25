@@ -18,7 +18,7 @@
 #define FALSE 0
 #define LIMIT 65535
 #define OPERATOR_LEN 256
-#define PTHREAD_MAX 10
+#define PTHREAD_MAX 16
 
 #define gettidv1() syscall(__NR_gettid)
 
@@ -26,11 +26,11 @@
 static int LOW = 0;
 static int HIGH = 0;
 
-pthread_spinlock_t	global_start_index_a_lock;
+pthread_spinlock_t    global_start_index_a_lock;
 //计算范围起始下标
 static int global_start_index_a = 1;
 
-pthread_spinlock_t	cur_cpu_core_index_lock;
+pthread_spinlock_t    cur_cpu_core_index_lock;
 //cpu核心编号,用于尽量保证每个线程都在不同的核上运行
 static int cur_cpu_core_index = 0;//
 
@@ -44,7 +44,7 @@ int CPU_CORE_NUM = 1;
 
 typedef struct
 {
-    pthread_t	pid;
+    pthread_t    pid;
 } PTHREAD_SIG;
 PTHREAD_SIG g_pthread_sig[PTHREAD_MAX];
 /*
@@ -152,7 +152,6 @@ void  big_data_add( const char* num1, const char* num2, char* sum )
     }
 }
 
-
 /**
  * *实现非负大整数相乘,用字符串存放大整数.multiply不做参数合法性检测
  * *num1/num2为要相乘的参数
@@ -216,7 +215,8 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
 }
 /**
 *对于给定的a b c,验证是否有a*a*a + b*b*b + c*c*c == 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
-*返回值为trcmp比较的值
+*返回值根据strcmp比较:二者相等返回0,否则返回1
+*如果rs不为空,还将上面等式左右两边的值分别存入返回,主要是供调试使用
 */
 int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
 {
@@ -251,8 +251,7 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
         strcpy(rs[0], sumabcCube);//a*a*a + b*b*b + c*c*c
         strcpy(rs[1], tmp[0]);//5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
     }
-
-    return strcmp(sumabcCube, tmp[0]);
+    return !!!strcmp(sumabcCube, tmp[0]);
 }
 /**
 证明以下值是正确的：
@@ -285,6 +284,7 @@ void check_ans_abc()
 void *_check_ans_abc_lt65536()
 {
     char a[OPERATOR_LEN], b[OPERATOR_LEN], c[OPERATOR_LEN];
+    //char rs[2][OPERATOR_LEN];
     int i = 0, j = 0, k = 0;
     int count = 0;
     int local_val = 0;
@@ -331,21 +331,20 @@ void *_check_ans_abc_lt65536()
 
         pid = getpid();
         tid = pthread_self();
-        printf("[LOG] pid:%u, u_tid:%u (0x%x), k_tid:%u, processor:%d, loop:[%d, %d)-[%d, %d)\n",\
+        printf("[LOG] pid:%u, u_tid:%u (0x%x), k_tid:%u, processor_no:%2d, n_i_range :[%d, %d), t_i_range[%d, %d)\n",\
                (unsigned int)pid, (unsigned int)tid, (unsigned int)tid, (unsigned int)gettidv1(),\
                local_cpu_core, LOW, HIGH, local_val, local_val + STEP0);
     }
-
     for (i = LOW; i < HIGH; i++)
     {
         for (j = local_val; j < local_val + STEP0; j++)
         {
-            for (k =(i/4 -j >j/4 -i?i/4 -j:j/4 -i); k <= 4*(i + j); k++)
+            for (k = local_val; k <= 4*(i + j); k++)
             {
                 sprintf(a, "%d", i);
                 sprintf(b, "%d", j);
                 sprintf(c, "%d", k);
-                local_count += check_ans_abc0(a, b, c, NULL);//
+                local_count += check_ans_abc0(a, b, c,NULL);//
             }
         }
     }
@@ -363,14 +362,14 @@ int check_ans_abc_lt65536(int low,int high)
     void * status;
     LOW = low;
     HIGH = high;
-    global_start_index_a = LOW + 1;//这里还属于初始化阶段,不用加锁
+    global_start_index_a = LOW;//这里还属于初始化阶段,不用加锁
     pthread_spin_init(&global_start_index_a_lock, PTHREAD_PROCESS_PRIVATE);
     pthread_spin_init(&cur_cpu_core_index_lock, PTHREAD_PROCESS_PRIVATE);
     pthread_mutex_init(&solution_num_mutex,NULL);
     CPU_CORE_NUM = sysconf(_SC_NPROCESSORS_CONF);
     memset(g_pthread_sig, 0, sizeof(g_pthread_sig));
     struct sigaction sigact;
-    STEP0 = (high - low) / PTHREAD_MAX;
+    STEP0 = ((LIMIT - low) % PTHREAD_MAX) ?(LIMIT - low) / PTHREAD_MAX + 1:  (LIMIT - low)/ PTHREAD_MAX;
     //创建PTHREAD_MAX个线程进行计算
     for(i = 0; i < PTHREAD_MAX; i++)
     {
@@ -419,7 +418,8 @@ int main(int argc, char ** argv)
         printf("No parameter!\n");
         return ERROR;
     }
-    write_result(argv[1], -1);//建立文件
+    //建立写回文件
+    write_result(argv[1], -1);
 
     if ( !strcmp(argv[1], OPTION[0]))
     {
@@ -428,6 +428,10 @@ int main(int argc, char ** argv)
         {
             high = high > LIMIT ?LIMIT:high;
             check_ans_abc_lt65536(low, high);
+        }
+        else
+        {
+            printf("Illegal parameter!\n");
         }
     }
     else  if ( !strcmp(argv[1], OPTION[1]))
