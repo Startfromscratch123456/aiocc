@@ -1,3 +1,15 @@
+/**
+ *     author:    ShijunDeng
+ *      email:    dengshijun1992@gmail.com
+ *       time:    2017-03-25
+ * a,b,c均为大于0的自然数：
+ * a/(b+c) + b/(a+c) + c/(a+b) = 4
+ * 1.编一个程序证明在a<65536,b<65536,c<65536情况下无解
+ * 2.编一个程序证明以下值是正确的：
+ *  a=4373612677928697257861252602371390152816537558161613618621437993378423467772036
+ *  b=36875131794129999827197811565225474825492979968971970996283137471637224634055579
+ *  c=154476802108746166441951315019919837485664325669565431700026634898253202035277999
+ **/
 #define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -10,14 +22,18 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sched.h>
+
 /* 定义状态码 */
 #define OK 0
 #define ERROR 1
 
 #define TRUE 1
 #define FALSE 0
+
 #define LIMIT 65535
+//操作数长度
 #define OPERATOR_LEN 256
+//最大线程数量
 #define PTHREAD_MAX 16
 
 #define gettidv1() syscall(__NR_gettid)
@@ -37,6 +53,7 @@ static int cur_cpu_core_index = 0;//
 //求的解的数量,其值为各线程求得的解之和
 pthread_mutex_t solution_num_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int solution_num = 0;//
+
 //每个进程分配的计算范围步长,初始值为1024,实际上会根据实际情况计算
 int STEP0 = 1024;
 //CPU的核数,初始阶段会调用相关函数获得准确的值
@@ -47,21 +64,11 @@ typedef struct
     pthread_t    pid;
 } PTHREAD_SIG;
 PTHREAD_SIG g_pthread_sig[PTHREAD_MAX];
-/*
-a,b,c均为大于0的自然数：
-a/(b+c) + b/(a+c) + c/(a+b) = 4
-1.编一个程序证明在a<65536,b<65536,c<65536情况下无解
-2.编一个程序证明以下值是正确的：
-a=4373612677928697257861252602371390152816537558161613618621437993378423467772036
-b=36875131794129999827197811565225474825492979968971970996283137471637224634055579
-c=154476802108746166441951315019919837485664325669565431700026634898253202035277999
-
- */
 
 /**
- * *实现非负大整数相加,用字符串存放大整数,add不做参数合法性检测
- * *num1/num2为要相加的参数
- * *sum 存放相加结果
+ * 实现非负大整数相加,用字符串存放大整数,add不做参数合法性检测
+ * num1/num2为要相加的参数
+ * sum 存放相加结果
  */
 void  big_data_add( const char* num1, const char* num2, char* sum )
 {
@@ -153,9 +160,9 @@ void  big_data_add( const char* num1, const char* num2, char* sum )
 }
 
 /**
- * *实现非负大整数相乘,用字符串存放大整数.multiply不做参数合法性检测
- * *num1/num2为要相乘的参数
- * *sum存放相乘结果
+ * 实现非负大整数相乘,用字符串存放大整数.multiply不做参数合法性检测
+ * num1/num2为要相乘的参数
+ * sum存放相乘结果
  */
 void big_data_multiply( const char* num1, const char* num2, char* sum )
 {
@@ -214,10 +221,10 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
     }
 }
 /**
-*对于给定的a b c,验证是否有a*a*a + b*b*b + c*c*c == 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
-*返回值根据strcmp比较:二者相等返回0,否则返回1
-*如果rs不为空,还将上面等式左右两边的值分别存入返回,主要是供调试使用
-*/
+ * 对于给定的a b c,验证是否有a*a*a + b*b*b + c*c*c == 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
+ * 返回值根据strcmp比较:二者相等返回0,否则返回1
+ * 如果rs不为空,还将上面等式左右两边的值分别存入返回,主要是供调试使用
+ */
 int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
 {
     char aa[OPERATOR_LEN], bb[OPERATOR_LEN], cc[OPERATOR_LEN];
@@ -254,12 +261,11 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
     return !!!strcmp(sumabcCube, tmp[0]);
 }
 /**
-证明以下值是正确的：
-a=4373612677928697257861252602371390152816537558161613618621437993378423467772036
-b=36875131794129999827197811565225474825492979968971970996283137471637224634055579
-c=154476802108746166441951315019919837485664325669565431700026634898253202035277999
-*
-*/
+ * 证明以下值是正确的：
+ * a=4373612677928697257861252602371390152816537558161613618621437993378423467772036
+ * b=36875131794129999827197811565225474825492979968971970996283137471637224634055579
+ * c=154476802108746166441951315019919837485664325669565431700026634898253202035277999
+ */
 void check_ans_abc()
 {
     char a[OPERATOR_LEN], b[OPERATOR_LEN], c[OPERATOR_LEN], rs[2][OPERATOR_LEN];
@@ -279,8 +285,8 @@ void check_ans_abc()
 }
 
 /**
-证明在a<65536,b<65536,c<65536情况下无解
-*/
+ * 证明在a<65536,b<65536,c<65536情况下无解
+ */
 void *_check_ans_abc_lt65536()
 {
     char a[OPERATOR_LEN], b[OPERATOR_LEN], c[OPERATOR_LEN];
@@ -354,6 +360,9 @@ void *_check_ans_abc_lt65536()
     pthread_mutex_unlock(&solution_num_mutex);
 }
 
+/**
+ *验证a b c在65536以内的情况
+ */
 int check_ans_abc_lt65536(int low,int high)
 {
     pthread_t ptid;
@@ -390,7 +399,10 @@ int check_ans_abc_lt65536(int low,int high)
     }
     return OK;
 }
-//将执行结果写回到文件:结果是本节点发现的解的个数
+
+/**
+ * 将执行结果写回到文件:结果是本节点发现的解的个数
+ */
 int write_result(char* name_prefix, int result)
 {
     int count = 0;
@@ -408,6 +420,8 @@ int write_result(char* name_prefix, int result)
     fclose(f);
     return OK;
 }
+
+
 int main(int argc, char ** argv)
 {
     int low, high;
