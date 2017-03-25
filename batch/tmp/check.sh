@@ -113,6 +113,7 @@ print_message "MULTEXU_INFO" "Q1.编一个程序证明在a<65536,b<65536,c<65536
 while [ ${low} -le ${range_limit} ];
 do 
     high=$(( ${low}+${step} ))
+    #在某个节点上进行[low, high]范围内的最外层循环
     ssh -f "${ip_table_array[${index}]}" "cd ${tencent2017_interview_dir}/ && ./tencent2017_interview Q1 ${low} ${high}"
     print_message "MULTEXU_INFO" "${ip_table_array[${index}]} execute range[${low}, ${high}]..."    
     low=${high}
