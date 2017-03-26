@@ -104,7 +104,6 @@ void  big_data_add( const char* num1, const char* num2, char* sum )
             strcpy( sum, num2 );
         }
     }
-
     memset( sum, '0', sizeof(char) * rs_len );
     sum[rs_len - 1] = 0;
     i  = num1_len - 1;
@@ -145,7 +144,6 @@ void  big_data_add( const char* num1, const char* num2, char* sum )
     {
         first_not_zero++;     /* 找到第一个非0 */
     }
-
     if ( first_not_zero )
     {
         i = 0;
@@ -204,12 +202,10 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
         }
         sum[i] += (carry);
     }
-
     while ( sum[first_not_zero] == '0' )
     {
         first_not_zero++;     /* 找到第一个非0 */
     }
-
     if ( first_not_zero )
     {
         i = 0;
@@ -220,6 +216,7 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
         sum[i] = 0;
     }
 }
+
 /**
  * 对于给定的a b c,验证是否有a*a*a + b*b*b + c*c*c == 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
  * 返回值根据strcmp比较:二者相等返回0,否则返回1
@@ -238,7 +235,7 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
     big_data_multiply(bb, b, bbb);
     big_data_multiply(cc, c, ccc);
     big_data_add(aaa, bbb, tmp[0]);
-    big_data_add(ccc, tmp[0], sumabcCube);
+    big_data_add(ccc, tmp[0], sumabcCube);//sumabcCube中存放的是a*a*a + b*b*b + c*c*c
     big_data_multiply(a, b, tmp[0]);
     big_data_multiply(c,  tmp[0], tmp[1]);
     big_data_multiply("5",  tmp[1], abc5);
@@ -253,6 +250,7 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
     big_data_add(tmp[0], tmp[5], tmp[1]);
     big_data_multiply("3", tmp[1], tmp[2]);
     big_data_add(abc5, tmp[2], tmp[0]);
+
     if (rs)
     {
         strcpy(rs[0], sumabcCube);//a*a*a + b*b*b + c*c*c
@@ -260,6 +258,7 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
     }
     return !!!strcmp(sumabcCube, tmp[0]);
 }
+
 /**
  * 证明以下值是正确的：
  * a=4373612677928697257861252602371390152816537558161613618621437993378423467772036
@@ -331,10 +330,8 @@ void *_check_ans_abc_lt65536()
     {
         fprintf(stderr, "get thread affinity failed\n");
     }
-
     if (CPU_ISSET(local_cpu_core, &get))
     {
-
         pid = getpid();
         tid = pthread_self();
         printf("[LOG] pid:%u, u_tid:%u (0x%x), k_tid:%u, processor_no:%2d, n_i_range :[%d, %d), t_i_range[%d, %d)\n",\
@@ -377,8 +374,7 @@ int check_ans_abc_lt65536(int low,int high)
     pthread_mutex_init(&solution_num_mutex,NULL);
     CPU_CORE_NUM = sysconf(_SC_NPROCESSORS_CONF);
     memset(g_pthread_sig, 0, sizeof(g_pthread_sig));
-    struct sigaction sigact;
-    STEP0 = ((LIMIT - low) % PTHREAD_MAX) ?(LIMIT - low) / PTHREAD_MAX + 1:  (LIMIT - low)/ PTHREAD_MAX;
+    STEP0 = ((LIMIT - low) % PTHREAD_MAX) ? (LIMIT - low) / PTHREAD_MAX + 1 : (LIMIT - low)/ PTHREAD_MAX;
     //创建PTHREAD_MAX个线程进行计算
     for(i = 0; i < PTHREAD_MAX; i++)
     {
@@ -421,7 +417,6 @@ int write_result(char* name_prefix, int result)
     return OK;
 }
 
-
 int main(int argc, char ** argv)
 {
     int low, high;
@@ -432,15 +427,14 @@ int main(int argc, char ** argv)
         printf("No parameter!\n");
         return ERROR;
     }
-    //建立写回文件
-    write_result(argv[1], -1);
-
     if ( !strcmp(argv[1], OPTION[0]))
     {
         //参数检测
         if (!(argc < 4 || (low = atoi(argv[2])) == 0 || (high = atoi(argv[3])) ==0 || low > LIMIT || low >= high))
         {
             high = high > LIMIT ?LIMIT:high;
+            //建立写回文件
+            write_result(argv[1], -1);
             check_ans_abc_lt65536(low, high);
         }
         else
@@ -451,7 +445,6 @@ int main(int argc, char ** argv)
     else  if ( !strcmp(argv[1], OPTION[1]))
     {
         check_ans_abc();
-
     }
     else
     {
@@ -461,4 +454,3 @@ int main(int argc, char ** argv)
     write_result(argv[1], solution_num);
     return OK;
 }
-
