@@ -31,11 +31,18 @@
 #define FALSE 0
 
 #define LIMIT 65535
-//操作数长度
+//操作数最大长度
 #define OPERATOR_LEN 256
-//最大线程数量
-#define PTHREAD_MAX 16
 
+//CPU的核数
+#define CPU_CORE_NUM sysconf(_SC_NPROCESSORS_CONF)
+
+#define max(x, y) (((x) > (y)) ? (x) : (y) )
+#define min(x, y) (((x) < (y)) ? (x) : (y) )
+
+//最大线程数量
+#define _PTHREAD_MAX 20
+#define PTHREAD_MAX min(CPU_CORE_NUM, _PTHREAD_MAX)
 #define gettidv1() syscall(__NR_gettid)
 
 //最外层的搜索范围,对于一个节点上的所有线程来说都是一样的;不同的计算节点计算范围由主控节点分配
@@ -56,14 +63,12 @@ static int solution_num = 0;//
 
 //每个进程分配的计算范围步长,初始值为1024,实际上会根据实际情况计算
 int STEP0 = 1024;
-//CPU的核数,初始阶段会调用相关函数获得准确的值
-int CPU_CORE_NUM = 1;
 
 typedef struct
 {
-    pthread_t    pid;
+    pthread_t pid;
 } PTHREAD_SIG;
-PTHREAD_SIG g_pthread_sig[PTHREAD_MAX];
+PTHREAD_SIG* g_pthread_sig;
 
 /**
  * 实现非负大整数相加,用字符串存放大整数,add不做参数合法性检测
@@ -76,10 +81,10 @@ void  big_data_add( const char* num1, const char* num2, char* sum )
     int num2_len = strlen( num2 );
     int rs_len = 2 + (num1_len > num2_len ? num1_len : num2_len);
     /* char* sum = 0; */
-    int i  = 0, j = 0, k = 0;
+    int i = 0, j = 0, k = 0;
     int first_not_zero = 0;
-    int tmp  = 0;
-    int carry  = 0;
+    int tmp = 0;
+    int carry = 0;
     /* 处理参数含0的情况 */
     while ( i < num1_len && num1[i] == '0' )
     {
@@ -168,10 +173,10 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
     int num2_len = strlen( num2 );
     int rs_len = num1_len + num2_len + 1;//m*n最多有m+n位,增加一位存'\0'
     /* char* sum = NULL; */
-    int i  = 0, j = 0;
+    int i = 0, j = 0;
     int first_not_zero = 0;
-    int tmp  = 0;
-    int carry  = 0;
+    int tmp = 0;
+    int carry = 0;
     /* 处理参数含0的情况 */
     while ( i < num1_len && num1[i] == '0' )
     {
@@ -222,27 +227,27 @@ void big_data_multiply( const char* num1, const char* num2, char* sum )
  * 返回值根据strcmp比较:二者相等返回0,否则返回1
  * 如果rs不为空,还将上面等式左右两边的值分别存入返回,主要是供调试使用
  */
-int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
+int check_ans_abc0(const char* a_str, const char* b_str, const char* c_str, char(*rs) [256])
 {
     char aa[OPERATOR_LEN], bb[OPERATOR_LEN], cc[OPERATOR_LEN];
     char aaa[OPERATOR_LEN], bbb[OPERATOR_LEN], ccc[OPERATOR_LEN];
     char sumabcCube[OPERATOR_LEN], abc5[OPERATOR_LEN];
     char tmp[6][OPERATOR_LEN];
-    big_data_multiply(a, a, aa);
-    big_data_multiply(b, b, bb);
-    big_data_multiply(c, c, cc);
-    big_data_multiply(aa, a, aaa);
-    big_data_multiply(bb, b, bbb);
-    big_data_multiply(cc, c, ccc);
+    big_data_multiply(a_str, a_str, aa);//计算a*a
+    big_data_multiply(b_str, b_str, bb);
+    big_data_multiply(c_str, c_str, cc);
+    big_data_multiply(aa, a_str, aaa);//计算a*a*a
+    big_data_multiply(bb, b_str, bbb);
+    big_data_multiply(cc, c_str, ccc);
     big_data_add(aaa, bbb, tmp[0]);
     big_data_add(ccc, tmp[0], sumabcCube);//sumabcCube中存放的是a*a*a + b*b*b + c*c*c
-    big_data_multiply(a, b, tmp[0]);
-    big_data_multiply(c,  tmp[0], tmp[1]);
+    big_data_multiply(a_str, b_str, tmp[0]);
+    big_data_multiply(c_str,  tmp[0], tmp[1]);
     big_data_multiply("5",  tmp[1], abc5);
 
-    big_data_add(b, c, tmp[0]);
-    big_data_add(a, c, tmp[1]);
-    big_data_add(a, b, tmp[2]);
+    big_data_add(b_str, c_str, tmp[0]);
+    big_data_add(a_str, c_str, tmp[1]);
+    big_data_add(a_str, b_str, tmp[2]);
     big_data_multiply(aa, tmp[0], tmp[3]);
     big_data_multiply(bb, tmp[1], tmp[4]);
     big_data_multiply(cc, tmp[2], tmp[5]);
@@ -256,7 +261,7 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
         strcpy(rs[0], sumabcCube);//a*a*a + b*b*b + c*c*c
         strcpy(rs[1], tmp[0]);//5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))
     }
-    return !!!strcmp(sumabcCube, tmp[0]);
+    return !strcmp(sumabcCube, tmp[0]);
 }
 
 /**
@@ -267,20 +272,20 @@ int check_ans_abc0(const char* a, const char* b, const char* c, char(*rs) [256])
  */
 void check_ans_abc()
 {
-    char a[OPERATOR_LEN], b[OPERATOR_LEN], c[OPERATOR_LEN], rs[2][OPERATOR_LEN];
-    strcpy(a,"4373612677928697257861252602371390152816537558161613618621437993378423467772036");
-    strcpy(b,"36875131794129999827197811565225474825492979968971970996283137471637224634055579");
-    strcpy(c,"154476802108746166441951315019919837485664325669565431700026634898253202035277999");
-    if (check_ans_abc0(a, b, c, rs))
-    {
-        printf("a*a*a + b*b*b + c*c*c != 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))\n");
-    }
-    else
+    char a_str[OPERATOR_LEN], b_str[OPERATOR_LEN], c_str[OPERATOR_LEN], rs_str[2][OPERATOR_LEN];
+    strcpy(a_str,"4373612677928697257861252602371390152816537558161613618621437993378423467772036");
+    strcpy(b_str,"36875131794129999827197811565225474825492979968971970996283137471637224634055579");
+    strcpy(c_str,"154476802108746166441951315019919837485664325669565431700026634898253202035277999");
+    if (check_ans_abc0(a_str, b_str, c_str, rs_str))
     {
         printf("a*a*a + b*b*b + c*c*c == 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))\n");
     }
-    printf("LOG: %s\n", rs[0]);
-    printf("LOG: %s\n", rs[1]);
+    else
+    {
+        printf("a*a*a + b*b*b + c*c*c != 5 * a * b * c + 3 * (aa * (b + c) + bb * (a + c) +  cc * (a + b))\n");
+    }
+    printf("LOG: %s\n", rs_str[0]);
+    printf("LOG: %s\n", rs_str[1]);
 }
 
 /**
@@ -288,7 +293,7 @@ void check_ans_abc()
  */
 void *_check_ans_abc_lt65536()
 {
-    char a[OPERATOR_LEN], b[OPERATOR_LEN], c[OPERATOR_LEN];
+    char a_str[OPERATOR_LEN], b_str[OPERATOR_LEN], c_str[OPERATOR_LEN];
     //char rs[2][OPERATOR_LEN];
     int i = 0, j = 0, k = 0;
     int count = 0;
@@ -310,14 +315,12 @@ void *_check_ans_abc_lt65536()
         global_start_index_a = global_start_index_a;
     }
     pthread_spin_unlock(&global_start_index_a_lock);
+
     //绑定一个cpu core
     pthread_spin_lock(&cur_cpu_core_index_lock);
     local_cpu_core = cur_cpu_core_index;
-    cur_cpu_core_index ++;
-    if (cur_cpu_core_index > CPU_CORE_NUM - 1)
-    {
-        cur_cpu_core_index = 0;
-    }
+    cur_cpu_core_index = (cur_cpu_core_index + 1) % CPU_CORE_NUM;
+    
     pthread_spin_unlock(&cur_cpu_core_index_lock);
     CPU_ZERO(&mask);
     CPU_SET(local_cpu_core, &mask);
@@ -338,16 +341,17 @@ void *_check_ans_abc_lt65536()
                (unsigned int)pid, (unsigned int)tid, (unsigned int)tid, (unsigned int)gettidv1(),\
                local_cpu_core, LOW, HIGH, local_val, local_val + STEP0);
     }
+
     for (i = LOW; i < HIGH; i++)
     {
-        for (j = local_val; j < local_val + STEP0; j++)
+        for (j = local_val; j < min(local_val + STEP0, LIMIT) ; j++)
         {
-            for (k = local_val; k <= 4*(i + j); k++)
+            for (k = max(max(i / 4 -j, j / 4 - i), local_val); k <= min(4 * (i + j), LIMIT); k++)
             {
-                sprintf(a, "%d", i);
-                sprintf(b, "%d", j);
-                sprintf(c, "%d", k);
-                local_count += check_ans_abc0(a, b, c,NULL);//
+                sprintf(a_str, "%d", i);
+                sprintf(b_str, "%d", j);
+                sprintf(c_str, "%d", k);
+                local_count += check_ans_abc0(a_str, b_str, c_str, NULL);//
             }
         }
     }
@@ -358,23 +362,49 @@ void *_check_ans_abc_lt65536()
 }
 
 /**
- *验证a b c在65536以内的情况
+ *
+ *初始化:锁、范围下标
  */
-int check_ans_abc_lt65536(int low,int high)
+int initialization(int low, int high)
+{
+    LOW = low;
+    HIGH = high;
+    global_start_index_a = LOW;//这里还属于初始化阶段,不用加锁
+    g_pthread_sig = (PTHREAD_SIG*) malloc(sizeof(PTHREAD_SIG) * PTHREAD_MAX);
+    if(g_pthread_sig)
+    {
+        pthread_spin_init(&global_start_index_a_lock, PTHREAD_PROCESS_PRIVATE);
+        pthread_spin_init(&cur_cpu_core_index_lock, PTHREAD_PROCESS_PRIVATE);
+        pthread_mutex_init(&solution_num_mutex,NULL);
+        STEP0 = ((LIMIT - low) % PTHREAD_MAX) ? (LIMIT - low) / PTHREAD_MAX + 1 : (LIMIT - low)/ PTHREAD_MAX;
+        memset(g_pthread_sig, 0, sizeof(g_pthread_sig));
+        return OK;
+    }
+    return ERROR;
+}
+
+/**
+ *
+ *清理:释放相关资源
+ */
+void finalize()
+{
+    pthread_mutex_destroy(&solution_num_mutex);
+    pthread_spin_destroy(&global_start_index_a_lock);
+    pthread_spin_destroy(&cur_cpu_core_index_lock);
+    free(g_pthread_sig);
+}
+
+/**
+ *
+ *启动计算的线程
+ */
+int start_compute_thread()
 {
     pthread_t ptid;
     int i = 0;
     int result = 0;
     void * status;
-    LOW = low;
-    HIGH = high;
-    global_start_index_a = LOW;//这里还属于初始化阶段,不用加锁
-    pthread_spin_init(&global_start_index_a_lock, PTHREAD_PROCESS_PRIVATE);
-    pthread_spin_init(&cur_cpu_core_index_lock, PTHREAD_PROCESS_PRIVATE);
-    pthread_mutex_init(&solution_num_mutex,NULL);
-    CPU_CORE_NUM = sysconf(_SC_NPROCESSORS_CONF);
-    memset(g_pthread_sig, 0, sizeof(g_pthread_sig));
-    STEP0 = ((LIMIT - low) % PTHREAD_MAX) ? (LIMIT - low) / PTHREAD_MAX + 1 : (LIMIT - low)/ PTHREAD_MAX;
     //创建PTHREAD_MAX个线程进行计算
     for(i = 0; i < PTHREAD_MAX; i++)
     {
@@ -397,12 +427,26 @@ int check_ans_abc_lt65536(int low,int high)
 }
 
 /**
+ *验证a b c在[low, high]以内的情况
+ */
+int check_ans_abc_lt65536(int low, int high)
+{
+    int status = 0;
+    if(OK == initialization(low, high))
+    {
+        status = start_compute_thread();
+        finalize();
+        return status;
+    }
+    return ERROR;
+}
+
+/**
  * 将执行结果写回到文件:结果是本节点发现的解的个数
  */
 int write_result(char* name_prefix, int result)
 {
-    int count = 0;
-    char file_name[16];
+    char file_name[32];
     sprintf(file_name,"result/%s_%d_%d", name_prefix, LOW, HIGH);
     FILE *f = fopen(file_name,"wb+");
     if (f && result != -1)
@@ -432,25 +476,28 @@ int main(int argc, char ** argv)
         //参数检测
         if (!(argc < 4 || (low = atoi(argv[2])) == 0 || (high = atoi(argv[3])) ==0 || low > LIMIT || low >= high))
         {
-            high = high > LIMIT ?LIMIT:high;
+            high = min(high, LIMIT);
             //建立写回文件
             write_result(argv[1], -1);
-            check_ans_abc_lt65536(low, high);
+            if(OK == check_ans_abc_lt65536(low, high))
+            {
+                //回写结果
+                return write_result(argv[1], solution_num);
+            }
         }
         else
         {
             printf("Illegal parameter!\n");
         }
     }
-    else  if ( !strcmp(argv[1], OPTION[1]))
+    else  if (!strcmp(argv[1], OPTION[1]))
     {
         check_ans_abc();
+        return OK;
     }
     else
     {
         printf("Illegal parameter!\n");
     }
-    //回写结果
-    write_result(argv[1], solution_num);
-    return OK;
+    return ERROR;
 }
