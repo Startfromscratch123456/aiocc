@@ -344,12 +344,12 @@ void *_check_ans_abc_lt65536()
 
     for (i = LOW; i < HIGH; i++)
     {
+        sprintf(a_str, "%d", i);
         for (j = local_val; j < min(local_val + STEP0, LIMIT) ; j++)
         {
+            sprintf(b_str, "%d", j);
             for (k = max(max(i / 4 -j, j / 4 - i), local_val); k <= min(4 * (i + j), LIMIT); k++)
-            {
-                sprintf(a_str, "%d", i);
-                sprintf(b_str, "%d", j);
+            {                
                 sprintf(c_str, "%d", k);
                 local_count += check_ans_abc0(a_str, b_str, c_str, NULL);//
             }
