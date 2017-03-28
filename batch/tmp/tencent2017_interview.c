@@ -312,7 +312,7 @@ void *_check_ans_abc_lt65536()
     global_start_index_a += STEP0;
     if (global_start_index_a > LIMIT)
     {
-        global_start_index_a = global_start_index_a;
+        global_start_index_a = LIMIT;
     }
     pthread_spin_unlock(&global_start_index_a_lock);
 
