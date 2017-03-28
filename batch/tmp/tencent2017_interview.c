@@ -22,7 +22,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sched.h>
-
+#include <stdint.h>
 /* 定义状态码 */
 #define OK 0
 #define ERROR 1
@@ -41,7 +41,9 @@
 #define min(x, y) (((x) < (y)) ? (x) : (y) )
 
 //最大线程数量
-#define _PTHREAD_MAX 20
+#define _PTHREAD_MAX 50
+//二层循环的执行粒度
+#define GRANU 20
 #define PTHREAD_MAX min(CPU_CORE_NUM, _PTHREAD_MAX)
 #define gettidv1() syscall(__NR_gettid)
 
@@ -295,7 +297,8 @@ void *_check_ans_abc_lt65536()
 {
     char a_str[OPERATOR_LEN], b_str[OPERATOR_LEN], c_str[OPERATOR_LEN];
     //char rs[2][OPERATOR_LEN];
-    int i = 0, j = 0, k = 0;
+    //int i = 0, j = 0, k = 0;
+    uint64_t x=0, y=0, z=0;
     int count = 0;
     int local_val = 0;
     int local_cpu_core;
@@ -304,17 +307,6 @@ void *_check_ans_abc_lt65536()
     cpu_set_t get;
     pid_t pid;
     pthread_t tid;
-
-    pthread_spin_lock(&global_start_index_a_lock);
-    //global_start_index_a的意义是global_start_index_a 前的范围都有线程在计算了
-    local_val = global_start_index_a;
-    //更新global_start_index_a的位置
-    global_start_index_a += STEP0;
-    if (global_start_index_a > LIMIT)
-    {
-        global_start_index_a = LIMIT;
-    }
-    pthread_spin_unlock(&global_start_index_a_lock);
 
     //绑定一个cpu core
     pthread_spin_lock(&cur_cpu_core_index_lock);
@@ -333,28 +325,55 @@ void *_check_ans_abc_lt65536()
     {
         fprintf(stderr, "get thread affinity failed\n");
     }
-    if (CPU_ISSET(local_cpu_core, &get))
+   
+    pthread_spin_lock(&global_start_index_a_lock);
+    //global_start_index_a的意义是global_start_index_a 前的范围都有线程在计算了
+    local_val = global_start_index_a;  
+    while (local_val < LIMIT) 
     {
-        pid = getpid();
-        tid = pthread_self();
-        printf("[LOG] pid:%u, u_tid:%u (0x%x), k_tid:%u, processor_no:%2d, n_i_range :[%d, %d), t_i_range[%d, %d)\n",\
+         //更新global_start_index_a的位置
+        global_start_index_a += STEP0;
+        if (global_start_index_a > LIMIT)
+        {
+            global_start_index_a = LIMIT;
+        }
+        pthread_spin_unlock(&global_start_index_a_lock);
+        if (CPU_ISSET(local_cpu_core, &get))
+        {
+            pid = getpid();
+            tid = pthread_self();
+            printf("[LOG] pid:%u, u_tid:%u (0x%x), k_tid:%u, processor_no:%2d, x_range :[%d, %d), y_range[%d, %d)\n",\
                (unsigned int)pid, (unsigned int)tid, (unsigned int)tid, (unsigned int)gettidv1(),\
                local_cpu_core, LOW, HIGH, local_val, local_val + STEP0);
-    }
-
-    for (i = LOW; i < HIGH; i++)
-    {
-        sprintf(a_str, "%d", i);
-        for (j = local_val; j < min(local_val + STEP0, LIMIT) ; j++)
+        } 
+        else
         {
-            sprintf(b_str, "%d", j);
-            for (k = max(max(i / 4 -j, j / 4 - i), local_val); k <= min(4 * (i + j), LIMIT); k++)
-            {                
-                sprintf(c_str, "%d", k);
-                local_count += check_ans_abc0(a_str, b_str, c_str, NULL);//
+             printf("[LOG]k_tid:%u, processor_no:%2d, x_range :[%d, %d), y_range[%d, %d)\n", (unsigned int)gettidv1(),\
+               local_cpu_core, LOW, HIGH, local_val, local_val + STEP0);
+        }
+        for(x = LOW; x < HIGH && !local_count; x++)
+        {
+            for(y = local_val; y < min(LIMIT, local_val + STEP0) && !local_count; y++)
+            {
+                for(z = min(4 * (x + y), LIMIT); z > 2 * (x + y) && !local_count; z--)
+                {
+                    if( (y + z) <= x) 
+                    {
+                        break;
+                    }
+                    if(x * (x + z) * (x + y) + y * (y + z) * (x + y) + z * (y + z) * (x + z) == 4 * (x + y) * (y + z) * (x + z))
+                    {
+                        local_count ++;
+                    }
+                }
             }
         }
-    }
+        pthread_spin_lock(&global_start_index_a_lock);
+        //global_start_index_a的意义是global_start_index_a 前的范围都有线程在计算了
+        local_val = global_start_index_a;  
+    }//while
+    //这里一定要释放锁
+    pthread_spin_unlock(&global_start_index_a_lock);
     //计算完毕，更新解的数量
     pthread_mutex_lock(&solution_num_mutex);
     solution_num += local_count;
@@ -376,7 +395,7 @@ int initialization(int low, int high)
         pthread_spin_init(&global_start_index_a_lock, PTHREAD_PROCESS_PRIVATE);
         pthread_spin_init(&cur_cpu_core_index_lock, PTHREAD_PROCESS_PRIVATE);
         pthread_mutex_init(&solution_num_mutex,NULL);
-        STEP0 = ((LIMIT - low) % PTHREAD_MAX) ? (LIMIT - low) / PTHREAD_MAX + 1 : (LIMIT - low)/ PTHREAD_MAX;
+        STEP0 = ((LIMIT - low) % (PTHREAD_MAX * GRANU)) ? (LIMIT - low) / (PTHREAD_MAX * GRANU) + 1 : (LIMIT - low)/ (PTHREAD_MAX * GRANU);
         memset(g_pthread_sig, 0, sizeof(g_pthread_sig));
         return OK;
     }
@@ -444,10 +463,10 @@ int check_ans_abc_lt65536(int low, int high)
 /**
  * 将执行结果写回到文件:结果是本节点发现的解的个数
  */
-int write_result(char* name_prefix, int result)
+int write_result(const char* name_prefix, int result)
 {
     char file_name[32];
-    sprintf(file_name,"result/%s");
+    sprintf(file_name,"result/%s",name_prefix);
     FILE *f = fopen(file_name,"wb+");
     if (f && result != -1)
     {
@@ -466,6 +485,7 @@ int main(int argc, char ** argv)
     int low, high;
     //Q1/Q2 解决问题1/2
     const char OPTION[2][3] = {"Q1", "Q2"};
+    const char *execute_signal_file ="execute_signal";
     if (argc < 2 || !argv[1])
     {
         printf("No parameter!\n");
@@ -479,10 +499,11 @@ int main(int argc, char ** argv)
             high = min(high, LIMIT);
             //建立写回文件
             write_result(argv[1], -1);
+            write_result(execute_signal_file, -1);
             if(OK == check_ans_abc_lt65536(low, high))
             {
                 //回写结果
-                return write_result(argv[1], solution_num);
+                return write_result(argv[1], solution_num) == OK && write_result(execute_signal_file, OK) == OK;
             }
         }
         else

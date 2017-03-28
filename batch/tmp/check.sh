@@ -17,8 +17,8 @@
 #运行本脚本时,假设主控制节点与所有节点(包括编译节点)已经进行SSH认证
 #
 #
-sleeptime=7200 #设置检测的睡眠时间
-limit=1200 #递减下限
+sleeptime=300 #设置检测的睡眠时间
+limit=60 #递减下限
 
 #
 #计算程序运行的时间
@@ -94,12 +94,18 @@ if [ "x$range_limit" = "x" ]; then
 fi
 tencent2017_interview_dir="${MULTEXU_BATCH_DIR}/tmp"
 auto_mkdir "${tencent2017_interview_dir}/result" "force"
+#是否有解的信号量
+solution_signal_file="${tencent2017_interview_dir}/result/Q1"
+#是否执行结束的信号量
+execute_signal_file="${tencent2017_interview_dir}/result/execute_signal"
 #分发源文件到各个计算节点
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="rm -f ${tencent2017_interview_dir}/tencent2017_interview*"
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --sendfile="${tencent2017_interview_dir}/tencent2017_interview.c" --location="${tencent2017_interview_dir}/" 
 
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="rm -rf ${tencent2017_interview_dir}/result"
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="mkdir ${tencent2017_interview_dir}/result"
+sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd=":> ${solution_signal_file}"
+sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${iptable_file} --cmd="echo 0 > ${execute_signal_file}"
 
 `${PAUSE_CMD}`
 #执行编译
@@ -109,10 +115,11 @@ nodes_num=`wc -l ${MULTEXU_BATCH_CONFIG_DIR}/${iptable_file} | cut -d ' ' -f 1`
 low=${start_index}
 high=1
 step=1
+granu=$(( ${nodes_num}*100 ))
 #总的计算范围
 distance=$(( ${range_limit}-${low} ))
 #向上取整
-upper_round ${distance} ${nodes_num} step
+upper_round ${distance} ${granu} step
 #step=`echo "( $range_limit - $low ) / $nodes_num" | bc`
 index=0
 
@@ -128,22 +135,43 @@ print_message "MULTEXU_ECHOX" " "
 print_message "MULTEXU_ECHOX" " "  
 echo ""
 `${PAUSE_CMD}` 
+
 print_message "MULTEXU_INFO" "Q1.编一个程序证明在a<65536,b<65536,c<65536情况下无解..."
 #分发任务到各节点
 while [ ${low} -le ${range_limit} ];
 do 
-    high=$(( ${low}+${step} ))
     #在某个节点上进行[low, high]范围内的最外层循环
-    ssh -f "${ip_table_array[${index}]}" "cd ${tencent2017_interview_dir}/ && ./tencent2017_interview Q1 ${low} ${high}"
-    sleep 1s
-    print_message "MULTEXU_INFO" "${ip_table_array[${index}]} execute range[${low}, ${high}]..."   
-    wait       
-    low=${high}
-    index=$(((${index}+1)%${nodes_num}))
+    for host_ip in ${ip_table_array[*]}
+    do
+        retval1=`ssh -f ${host_ip} "cat ${solution_signal_file}"`
+        #retval=$?
+        #先检测是否找到解了
+        if [ "x${retval1}" != "x" ];then
+            if [ ${retval1} -gt 0 ];then
+                print_message "MULTEXU_INFO" "node ${host_ip} find at least one solution..."
+                #终止所有任务
+                #send_execute_statu_signal "" ""
+                __clear
+                exit 0
+             fi
+        fi
+        #若当前节点任务完成则分派一个新的任务
+        retval2=`ssh -f ${host_ip} "cat ${execute_signal_file}"`
+        if [ "x${retval2}" == "x0" ];then
+                high=$(( ${low}+${step} ))
+                ssh -f ${host_ip} ":> ${execute_signal_file}"
+                print_message "MULTEXU_INFO" "distribute a task to node ${host_ip}, range[${low}, ${high}]..."
+                ssh -f "${host_ip}" "cd ${tencent2017_interview_dir}/ && ./tencent2017_interview Q1 ${low} ${high}"
+                low=${high}
+                sleep 1s  
+        fi
+    done
+    sleep 10s    
 done
-signal_file="${tencent2017_interview_dir}/result/Q1*"
+exit 0
 #检测任务完成状态,检测到任意一个节点输出的解的个数大于0,就停止检测
 count=0
+print_message "MULTEXU_INFO" "No new tasks, waiting for the remaining tasks to finish..."
 while [ true ];
 do
     print_message "MULTEXU_INFO" "waiting nodes which its ip in ${iptable_file} computing,the next check time will be ${sleeptime}s later..."
@@ -152,7 +180,7 @@ do
 
     for host_ip in ${ip_table_array[*]}
     do
-        retval=`ssh -f ${host_ip} "cat ${signal_file}"`
+        retval=`ssh -f ${host_ip} "cat ${solution_signal_file}"`
         #retval=$?
         if [ "x$retval" != "x" ];then
             if [ $retval -gt 0 ];then
@@ -164,7 +192,7 @@ do
             elif [ $retval -eq 0 ];then
                 (( count += 1 ))
                 #全部执行完毕 且没有找到解
-                if [ ${count} -eq ${nodes_num} ];then 
+                if [ ${count} -ge ${nodes_num} ];then 
                     break 2
                 fi
             fi
