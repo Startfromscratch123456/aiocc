@@ -447,7 +447,7 @@ int check_ans_abc_lt65536(int low, int high)
 int write_result(char* name_prefix, int result)
 {
     char file_name[32];
-    sprintf(file_name,"result/%s_%d_%d", name_prefix, LOW, HIGH);
+    sprintf(file_name,"result/%s");
     FILE *f = fopen(file_name,"wb+");
     if (f && result != -1)
     {
