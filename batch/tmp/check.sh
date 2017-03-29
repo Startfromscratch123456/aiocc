@@ -17,8 +17,8 @@
 #运行本脚本时,假设主控制节点与所有节点(包括编译节点)已经进行SSH认证
 #
 #
-sleeptime=300 #设置检测的睡眠时间
-limit=60 #递减下限
+sleeptime=30 #设置检测的睡眠时间
+limit=10 #递减下限
 
 #
 #计算程序运行的时间
@@ -166,7 +166,7 @@ do
                 sleep 1s  
         fi
     done
-    sleep 10s    
+    sleep 1s
 done
 #检测任务完成状态,检测到任意一个节点输出的解的个数大于0,就停止检测
 count=0
@@ -195,7 +195,7 @@ do
                     break 2
                 fi
             fi
-        fi       
+        fi
     done
     if [ $sleeptime -gt $limit ];then
         let sleeptime/=2
