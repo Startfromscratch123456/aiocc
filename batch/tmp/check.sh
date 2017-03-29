@@ -168,7 +168,6 @@ do
     done
     sleep 10s    
 done
-exit 0
 #检测任务完成状态,检测到任意一个节点输出的解的个数大于0,就停止检测
 count=0
 print_message "MULTEXU_INFO" "No new tasks, waiting for the remaining tasks to finish..."
