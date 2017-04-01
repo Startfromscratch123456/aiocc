@@ -6,7 +6,7 @@ Automatic I/O congestion control(AIOCC)
 ![Progress](http://progressed.io/bar/80?title=completed )
 
 
-#[AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
+# [AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
 
 在HPC存储系统和云存储系统中，为了实现高性能和高并行，一个I/O操作通常被分割为若干个请求序列，同时将这些请求发送到服务器端，导致存储系统中涌现大量资源竞争，如存储带宽。HPC存储系统和云存储系统中，通常会有成百上千个客户端，运行各类应用，每个应用会发送一定数量的I/O请求。因此存储系统中会充斥着大量的请求，资源竞争十分激烈。
 
@@ -23,7 +23,7 @@ Automatic I/O congestion control(AIOCC)
 基于以上分析，对分布式文件系统的I/O行为进行端到端智能化控制和管理，实现针对分布式文件系统的自动I/O行为控制管理方案具有很大实用价值。
 本方案提出一种基于机器学习的分布式文件系统可扩展的自动I/O拥塞控制机制，应对存储系统中的资源竞争，提高资源利用率，降低系统性能偏差，实现**性能隔离**（performance isolation），应用**程序/作业/进程的公平性**（applications/jobs/ processes fairness）和**延迟控制**（latency control）。
 
-#AIOCC的特点
+# AIOCC的特点
 - 系统地对分布式文件系统I/O负载特征进行分析处理：研究存储系统 I/O 数据规律，包括I/O 负载特征的经验分布、I/O 到达间隔时间的相关性以及I/O 负载的自相似性等，并对不同时期、不同层级、不同类型的典型I/O 负载，合成短小、精确的特征负载。
 - 自动进行对存储特征负载测试，运用数理统计方法对测试结果进行处理，评估规则对特征负载的调控效果；
 - 使用机器学习的方式产生/优化规则库，基于规则自动管理存储系统中资源竞争，提高资源利用率；
@@ -32,7 +32,7 @@ Automatic I/O congestion control(AIOCC)
 
 
 
-#AIOCC架构
+# AIOCC架构
 
 ![image](https://github.com/ShijunDeng/aiocc/blob/master/source/image/architecture_aiocc.png)
 
