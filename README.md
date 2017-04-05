@@ -2,11 +2,11 @@ Automatic I/O congestion control(AIOCC)
 =========================
 [![TeamCity CodeBetter](https://img.shields.io/teamcity/codebetter/bt428.svg?maxAge=2592000)]()
 [![Packagist](https://img.shields.io/packagist/v/symfony/symfony.svg?maxAge=2592000)]()
-[![Yii2](https://img.shields.io/badge/Powered_by-multexu Framework-green.svg?style=flat)]()
-![Progress](http://progressed.io/bar/80?title=completed )
+[![Yii2](https://img.shields.io/badge/Powered_by-multexu_Framework-green.svg?style=flat)]()
+[![Progress](http://progressed.io/bar/80?title=completed)]()
 
 
-# [AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
+# [点击访问AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
 
 在HPC存储系统和云存储系统中，为了实现高性能和高并行，一个I/O操作通常被分割为若干个请求序列，同时将这些请求发送到服务器端，导致存储系统中涌现大量资源竞争，如存储带宽。HPC存储系统和云存储系统中，通常会有成百上千个客户端，运行各类应用，每个应用会发送一定数量的I/O请求。因此存储系统中会充斥着大量的请求，资源竞争十分激烈。
 
