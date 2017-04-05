@@ -1,9 +1,9 @@
-	Automatic I/O congestion control(AIOCC)
+Automatic I/O congestion control(AIOCC)
 =========================
 [![TeamCity CodeBetter](https://img.shields.io/teamcity/codebetter/bt428.svg?maxAge=2592000)]()
 [![Packagist](https://img.shields.io/packagist/v/symfony/symfony.svg?maxAge=2592000)]()
 [![Yii2](https://img.shields.io/badge/Powered_by-multexu Framework-green.svg?style=flat)]()
-[![Progress](http://progressed.io/bar/80?title=completed )]()
+![Progress](http://progressed.io/bar/80?title=completed )
 
 
 # [AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
