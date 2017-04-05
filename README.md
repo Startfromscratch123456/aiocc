@@ -1,9 +1,9 @@
-Automatic I/O congestion control(AIOCC)
+	Automatic I/O congestion control(AIOCC)
 =========================
 [![TeamCity CodeBetter](https://img.shields.io/teamcity/codebetter/bt428.svg?maxAge=2592000)]()
 [![Packagist](https://img.shields.io/packagist/v/symfony/symfony.svg?maxAge=2592000)]()
 [![Yii2](https://img.shields.io/badge/Powered_by-multexu Framework-green.svg?style=flat)]()
-![Progress](http://progressed.io/bar/80?title=completed )
+[![Progress](http://progressed.io/bar/80?title=completed )]()
 
 
 # [AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
@@ -28,7 +28,7 @@ Automatic I/O congestion control(AIOCC)
 - 自动进行对存储特征负载测试，运用数理统计方法对测试结果进行处理，评估规则对特征负载的调控效果；
 - 使用机器学习的方式产生/优化规则库，基于规则自动管理存储系统中资源竞争，提高资源利用率；
 - 优化自动调节的过程，实施端到端控制；
-- 在Lustre文件系统实现上述方案原型；
+- 在Lustre文件系统实现上述方案原型(文件系统接口C语言实现,控制模型shell/Python实现)；
 
 
 
