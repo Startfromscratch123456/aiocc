@@ -36,7 +36,8 @@ mount -t lustre /dev/vda7 /mnt/lustre
 mkdir /mnt/ost1 && mount -t lustre /dev/vda7 /mnt/ost1/
 #xshell传送文件软件安装
 yum install lrzsz
-
+#批量部署
+sh /home/development/LustreTools/batch/deploy/auto_lustre2.8.0_deploy.sh --mdsnode=192.168.122.15 --devname=/dev/vda --devindex=7
 #安装lmt
 yum -y install libtool-ltdl-devel glibc-common libtool autoconf automake mysql-devel expat-devel 
 yum -y install openssl098e
