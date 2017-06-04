@@ -35,6 +35,9 @@
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 
+/*使用libguestfs api*/
+#include "guestfs.h"
+
 /* Plugin name */
 #define PLUGIN_NAME "vm_disk"
 
@@ -89,6 +92,10 @@
 #endif
 
 #endif /* LIBVIR_CHECK_VERSION */
+
+/* These globals are shared with options.c. */
+//guestfs_h *g;
+
 
 static const char *config_keys[] = {"Connection",
 
@@ -333,9 +340,6 @@ enum ex_stats {
   ex_stats_none = 0,
   ex_stats_disk_usage = 1 << 0,
   ex_stats_domain_state = 1 << 2,
-#ifdef HAVE_DISK_ERR
-  ex_stats_disk_err = 1 << 3,
-#endif
 };
 
 static unsigned int extra_stats = ex_stats_none;
@@ -347,9 +351,6 @@ struct ex_stats_item {
 static const struct ex_stats_item ex_stats_table[] = {
     {"disk_usage", ex_stats_disk_usage},
     {"domain_state", ex_stats_domain_state},
-#ifdef HAVE_DISK_ERR
-    {"disk_err", ex_stats_disk_err},
-#endif
     {NULL, ex_stats_none},
 };
 
@@ -368,30 +369,17 @@ struct lv_info {
   unsigned long long total_syst_cpu_time;
 };
 
-struct lv_block_info {
+struct lv_block_usage_info {
   int capacity_total;
-  int caapcity_used;
-  int usage_rate100;
+  int capacity_free;
 };
 
-static void init_block_info(struct lv_block_info *binfo) {
+static void init_block_usage_info(struct lv_block_usage_info *buinfo) {
   if (binfo == NULL)
     return;
-  binfo->capacity_total = -1;
-  binfo->caapcity_used = -1;
-  binfo->usage_rate100 = -1;
+  buinfo->capacity_total = -1;
+  buinfo->capacity_free = -1;
 }
-
-#ifdef HAVE_BLOCK_STATS_FLAGS
-
-static int get_block_info(struct lv_block_info *binfo, int nparams) {
-  if (binfo == NULL || param == NULL)
-    return -1;  
-  //GET_BLOCK_INFO_VALUE("usage_rate100", usage_rate100);  
-  return 0;
-}
-
-#endif /* HAVE_BLOCK_STATS_FLAGS */
 
 /* ERROR(...) macro for virterrors. */
 #define VIRT_ERROR(conn, s)                                                    \
@@ -407,6 +395,7 @@ static void init_lv_info(struct lv_info *info) {
     memset(info, 0, sizeof(*info));
 }
 
+//dom  --->  info
 static int lv_domain_info(virDomainPtr dom, struct lv_info *info) {
   //参见：qemuDomainGetInfo	
   return virDomainGetInfo(dom, &(info->di)) != 0 ? ret:0;
@@ -539,28 +528,7 @@ static void submit_derive2(const char *type, derive_t v0, derive_t v1,
 } /* void submit_derive2 */
 
 
-static double cpu_ns_to_percent(unsigned int node_cpus,
-                                unsigned long long cpu_time_old,
-                                unsigned long long cpu_time_new) {
-  double percent = 0.0;
-  unsigned long long cpu_time_diff = 0;
-  double time_diff_sec = CDTIME_T_TO_DOUBLE(plugin_get_interval());
-
-  if (node_cpus != 0 && time_diff_sec != 0 && cpu_time_old != 0) {
-    cpu_time_diff = cpu_time_new - cpu_time_old;
-    percent = ((double)(100 * cpu_time_diff)) /
-              (time_diff_sec * node_cpus * NANOSEC_IN_SEC);
-  }
-
-  DEBUG(PLUGIN_NAME ": node_cpus=%u cpu_time_old=%llu cpu_time_new=%llu"
-                    "cpu_time_diff=%llu time_diff_sec=%f percent=%f",
-        node_cpus, cpu_time_old, cpu_time_new, cpu_time_diff, time_diff_sec,
-        percent);
-
-  return percent;
-}
-
-static void disk_submit(struct lv_block_info *binfo, virDomainPtr dom,
+static void disk_submit(struct lv_block_usage_info *buinfo, virDomainPtr dom,
                         const char *dev) {
   char *dev_copy = strdup(dev);
   const char *type_instance = dev_copy;
@@ -580,28 +548,9 @@ static void disk_submit(struct lv_block_info *binfo, virDomainPtr dom,
   ssnprintf(flush_type_instance, sizeof(flush_type_instance), "flush-%s",
             type_instance);
 
-  if ((binfo->bi.rd_req != -1) && (binfo->bi.wr_req != -1))
-    submit_derive2("disk_ops", (derive_t)binfo->bi.rd_req,
-                   (derive_t)binfo->bi.wr_req, dom, type_instance);
-
-  if ((binfo->bi.rd_bytes != -1) && (binfo->bi.wr_bytes != -1))
-    submit_derive2("disk_octets", (derive_t)binfo->bi.rd_bytes,
-                   (derive_t)binfo->bi.wr_bytes, dom, type_instance);
-
-  if (extra_stats & ex_stats_disk) {
-    if ((binfo->rd_total_times != -1) && (binfo->wr_total_times != -1))
-      submit_derive2("disk_time", (derive_t)binfo->rd_total_times,
-                     (derive_t)binfo->wr_total_times, dom, type_instance);
-
-    if (binfo->fl_req != -1)
-      submit(dom, "total_requests", flush_type_instance,
-             &(value_t){.derive = (derive_t)binfo->fl_req}, 1);
-    if (binfo->fl_total_times != -1) {
-      derive_t value = binfo->fl_total_times / 1000; // ns -> ms
-      submit(dom, "total_time_in_ms", flush_type_instance,
-             &(value_t){.derive = value}, 1);
-    }
-  }
+  if ((buinfo->capacity_total != -1) && (buinfo->capacity_free != -1))
+    submit_derive2("disk_usage", (derive_t)buinfo->capacity_total,
+                   (derive_t)buinfo->capacity_free, dom, type_instance);
 
   sfree(dev_copy);
 }
@@ -882,6 +831,7 @@ static int lv_config(const char *key, const char *value) {
       extra_stats = parse_ex_stats_flags(exstats, numexstats);
       sfree(localvalue);
 
+
 #ifdef HAVE_JOB_STATS
       if ((extra_stats & ex_stats_job_stats_completed) &&
           (extra_stats & ex_stats_job_stats_background)) {
@@ -932,70 +882,65 @@ static void lv_disconnect(void) {
   WARNING(PLUGIN_NAME " plugin: closed connection to libvirt");
 }
 
-static int lv_domain_block_info(virDomainPtr dom, const char *path,
-                                struct lv_block_info *binfo) {
-#ifdef HAVE_BLOCK_STATS_FLAGS
-  int nparams = 0;
-  if (virDomainBlockStatsFlags(dom, path, NULL, &nparams, 0) < 0 ||
-      nparams <= 0) {
-    VIRT_ERROR(conn, "getting the disk params count");
+static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
+                                struct lv_block_usage_info *buinfo) {
+
+  CLEANUP_FREE_STRING_LIST char **devices = NULL;
+  CLEANUP_FREE_STRING_LIST char **fses = NULL;
+
+  guestfs_h *g; 
+  g = guestfs_create ();
+  if (g == NULL) {
+    perror ("guestfs_create");
+    return -1;
+  }
+  add_libvirt_drives(g, dom->name);
+  guestfs_set_identifier (g, dom->name);  
+  guestfs_set_trace (g, 0);
+  guestfs_set_verbose (g,0);
+  
+  if (guestfs_launch (g) == -1) {
+    perror ("guestfs_launch");
     return -1;
   }
 
-  virTypedParameterPtr params = calloc((size_t)nparams, sizeof(*params));
-  if (params == NULL) {
-    ERROR("virt plugin: alloc(%i) for block=%s parameters failed.", nparams,
-          path);
+  devices = guestfs_list_devices (g);
+  if (devices == NULL)
     return -1;
-  }
 
-  int rc = -1;
-  if (virDomainBlockStatsFlags(dom, path, params, &nparams, 0) < 0) {
-    VIRT_ERROR(conn, "getting the disk params values");
-  } else {
-    rc = get_block_info(binfo, params, nparams);
-  }
+  fses = guestfs_list_filesystems (g);
+  if (fses == NULL)
+    return -1;
 
-  virTypedParamsClear(params, nparams);
-  sfree(params);
-  return rc;
-#else
-  return virDomainBlockStats(dom, path, &(binfo->bi), sizeof(binfo->bi));
-#endif /* HAVE_BLOCK_STATS_FLAGS */
+  for (i = 0; fses[i] != NULL; i += 2) {
+    if (STRNEQ (fses[i+1], "") &&
+        STRNEQ (fses[i+1], "swap") &&
+        STRNEQ (fses[i+1], "unknown")) {
+      const char *dev = fses[i];
+      CLEANUP_FREE_STATVFS struct guestfs_statvfs *stat = NULL;
+
+      if (verbose)
+        fprintf (stderr, "df_on_handle: %s dev %s\n", name, dev);
+
+      /* Try mounting and stating the device.  This might reasonably
+       * fail, so don't show errors.
+       */
+      guestfs_push_error_handler (g, NULL, NULL);
+
+      if (guestfs_mount_ro (g, dev, "/") == 0) {
+        stat = guestfs_statvfs (g, "/");
+        guestfs_umount_all (g);
+      }
+
+      guestfs_pop_error_handler (g);
+
+      if (stat){
+	  	buinfo->capacity_total = (stat.blocks)*(stat.bsize);
+		buinfo->capacity_free = (stat.blocks)*(stat.frsize);
+      }
+    }
+  }
 }
-
-#ifdef HAVE_PERF_STATS
-static void perf_submit(virDomainStatsRecordPtr stats) {
-  for (int i = 0; i < stats->nparams; ++i) {
-    /* Replace '.' with '_' in event field to match other metrics' naming
-     * convention */
-    char *c = strchr(stats->params[i].field, '.');
-    if (c)
-      *c = '_';
-    submit(stats->dom, "perf", stats->params[i].field,
-           &(value_t){.derive = stats->params[i].value.ul}, 1);
-  }
-}
-
-static int get_perf_events(virDomainPtr domain) {
-  virDomainStatsRecordPtr *stats = NULL;
-  /* virDomainListGetStats requires a NULL terminated list of domains */
-  virDomainPtr domain_array[] = {domain, NULL};
-
-  int status =
-      virDomainListGetStats(domain_array, VIR_DOMAIN_STATS_PERF, &stats, 0);
-  if (status == -1) {
-    ERROR("virt plugin: virDomainListGetStats failed with status %i.", status);
-    return status;
-  }
-
-  for (int i = 0; i < status; ++i)
-    perf_submit(stats[i]);
-
-  virDomainStatsRecordListFree(stats);
-  return 0;
-}
-#endif /* HAVE_PERF_STATS */
 
 #ifdef HAVE_DOM_REASON
 static int get_domain_state(virDomainPtr domain) {
@@ -1014,46 +959,6 @@ static int get_domain_state(virDomainPtr domain) {
 }
 #endif /* HAVE_DOM_REASON */
 
-#ifdef HAVE_DISK_ERR
-static void disk_err_submit(virDomainPtr domain,
-                            virDomainDiskErrorPtr disk_err) {
-  submit(domain, "disk_error", disk_err->disk,
-         &(value_t){.gauge = disk_err->error}, 1);
-}
-
-static int get_disk_err(virDomainPtr domain) {
-  /* Get preferred size of disk errors array */
-  int disk_err_count = virDomainGetDiskErrors(domain, NULL, 0, 0);
-  if (disk_err_count == -1) {
-    ERROR(PLUGIN_NAME
-          " plugin: failed to get preferred size of disk errors array");
-    return -1;
-  }
-
-  DEBUG(PLUGIN_NAME
-        " plugin: preferred size of disk errors array: %d for domain %s",
-        disk_err_count, virDomainGetName(domain));
-  virDomainDiskError disk_err[disk_err_count];
-
-  disk_err_count = virDomainGetDiskErrors(domain, disk_err, disk_err_count, 0);
-  if (disk_err_count == -1) {
-    ERROR(PLUGIN_NAME " plugin: virDomainGetDiskErrors failed with status %d",
-          disk_err_count);
-    return -1;
-  }
-
-  DEBUG(PLUGIN_NAME " plugin: detected %d disk errors in domain %s",
-        disk_err_count, virDomainGetName(domain));
-
-  for (int i = 0; i < disk_err_count; ++i) {
-    disk_err_submit(domain, &disk_err[i]);
-    sfree(disk_err[i].disk);
-  }
-
-  return 0;
-}
-#endif /* HAVE_DISK_ERR */
-
 static int get_block_stats(struct block_device *block_dev) {
 
   if (!block_dev) {
@@ -1061,11 +966,11 @@ static int get_block_stats(struct block_device *block_dev) {
     return -1;
   }
 
-  struct lv_block_info binfo;
-  init_block_info(&binfo);
+  struct lv_block_usage_info binfo;
+  init_block_usage_info(&binfo);
 
-  if (lv_domain_block_info(block_dev->dom, block_dev->path, &binfo) < 0) {
-    ERROR(PLUGIN_NAME " plugin: lv_domain_block_info failed");
+  if (lv_domain_block_usage_info(block_dev->dom, block_dev->path, &binfo) < 0) {
+    ERROR(PLUGIN_NAME " plugin: lv_domain_block_usage_info failed");
     return -1;
   }
 
@@ -1267,16 +1172,6 @@ static int lv_read(user_data_t *ud) {
             virDomainGetName(state->domains[i].ptr));
   }
 
-  /* Get interface stats for each domain. */
-  for (int i = 0; i < state->nr_interface_devices; ++i) {
-    int status = get_if_dev_stats(&state->interface_devices[i]);
-    if (status != 0)
-      ERROR(PLUGIN_NAME
-            " failed to get interface stats for device (%s) in domain %s",
-            state->interface_devices[i].path,
-            virDomainGetName(state->interface_devices[i].dom));
-  }
-
   return 0;
 }
 
@@ -1317,6 +1212,9 @@ static int lv_init(void) {
 
   if (lv_connect() != 0)
     return -1;
+  
+  //if ((g = guestfs_create ()) == NULL)
+	 // return -1;
 
   DEBUG(PLUGIN_NAME " plugin: starting %i instances", nr_instances);
 
@@ -1787,6 +1685,10 @@ static int ignore_device_match(ignorelist_t *il, const char *domname,
   sfree(name);
   return r;
 }
+/*
+static int libguestfs_clear(){
+  guestfs_close (g);
+}*/
 
 static int lv_shutdown(void) {
   for (int i = 0; i < nr_instances; ++i) {
@@ -1802,6 +1704,7 @@ static int lv_shutdown(void) {
   ignorelist_free(il_interface_devices);
   il_interface_devices = NULL;
 
+  //libguestfs_clear();
   return 0;
 }
 
