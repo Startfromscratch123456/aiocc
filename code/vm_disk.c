@@ -375,7 +375,7 @@ struct lv_block_usage_info {
 };
 
 static void init_block_usage_info(struct lv_block_usage_info *buinfo) {
-  if (binfo == NULL)
+  if (buinfo == NULL)
     return;
   buinfo->capacity_total = -1;
   buinfo->capacity_free = -1;
@@ -398,7 +398,8 @@ static void init_lv_info(struct lv_info *info) {
 //dom  --->  info
 static int lv_domain_info(virDomainPtr dom, struct lv_info *info) {
   //参见：qemuDomainGetInfo	
-  return virDomainGetInfo(dom, &(info->di)) != 0 ? ret:0;
+  int ret = virDomainGetInfo(dom, &(info->di));
+  return ret != 0 ? ret:0;
 }
 
 static void init_value_list(value_list_t *vl, virDomainPtr dom) {
@@ -684,21 +685,14 @@ static int lv_config(const char *key, const char *value) {
     blockdevice_format_basename = IS_TRUE(value);
     return 0;
   }
-  if (strcasecmp(key, "InterfaceDevice") == 0) {
-    if (ignorelist_add(il_interface_devices, value))
-      return 1;
-    return 0;
-  }
 
   if (strcasecmp(key, "IgnoreSelected") == 0) {
     if (IS_TRUE(value)) {
       ignorelist_set_invert(il_domains, 0);
       ignorelist_set_invert(il_block_devices, 0);
-      ignorelist_set_invert(il_interface_devices, 0);
     } else {
       ignorelist_set_invert(il_domains, 1);
       ignorelist_set_invert(il_block_devices, 1);
-      ignorelist_set_invert(il_interface_devices, 1);
     }
     return 0;
   }
@@ -784,20 +778,6 @@ static int lv_config(const char *key, const char *value) {
     return 0;
   }
 
-  if (strcasecmp(key, "InterfaceFormat") == 0) {
-    if (strcasecmp(value, "name") == 0)
-      interface_format = if_name;
-    else if (strcasecmp(value, "address") == 0)
-      interface_format = if_address;
-    else if (strcasecmp(value, "number") == 0)
-      interface_format = if_number;
-    else {
-      ERROR(PLUGIN_NAME " plugin: unknown InterfaceFormat: %s", value);
-      return -1;
-    }
-    return 0;
-  }
-
   if (strcasecmp(key, "Instances") == 0) {
     char *eptr = NULL;
     double val = strtod(value, &eptr);
@@ -830,17 +810,6 @@ static int lv_config(const char *key, const char *value) {
           strsplit(localvalue, exstats, STATIC_ARRAY_SIZE(exstats));
       extra_stats = parse_ex_stats_flags(exstats, numexstats);
       sfree(localvalue);
-
-
-#ifdef HAVE_JOB_STATS
-      if ((extra_stats & ex_stats_job_stats_completed) &&
-          (extra_stats & ex_stats_job_stats_background)) {
-        ERROR(PLUGIN_NAME " plugin: Invalid job stats configuration. Only one "
-                          "type of job statistics can be collected at the same "
-                          "time");
-        return 1;
-      }
-#endif
     }
   }
 
@@ -850,13 +819,6 @@ static int lv_config(const char *key, const char *value) {
 
 static int lv_connect(void) {
   if (conn == NULL) {
-/* `conn_string == NULL' is acceptable */
-#ifdef HAVE_FS_INFO
-    /* virDomainGetFSInfo requires full read-write access connection */
-    if (extra_stats & ex_stats_fs_info)
-      conn = virConnectOpen(conn_string);
-    else
-#endif
       conn = virConnectOpenReadOnly(conn_string);
     if (conn == NULL) {
       c_complain(LOG_ERR, &conn_complain,
@@ -881,21 +843,28 @@ static void lv_disconnect(void) {
   conn = NULL;
   WARNING(PLUGIN_NAME " plugin: closed connection to libvirt");
 }
+//tag
+int
+add_libvirt_drives (guestfs_h *g, virDomainPtr dom)
+{
+  return 0;
+}
+
 
 static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
                                 struct lv_block_usage_info *buinfo) {
 
-  CLEANUP_FREE_STRING_LIST char **devices = NULL;
-  CLEANUP_FREE_STRING_LIST char **fses = NULL;
-
+  char **devices = NULL;
+  char **fses = NULL;
+  int i;
   guestfs_h *g; 
   g = guestfs_create ();
   if (g == NULL) {
     perror ("guestfs_create");
     return -1;
   }
-  add_libvirt_drives(g, dom->name);
-  guestfs_set_identifier (g, dom->name);  
+  add_libvirt_drives(g, dom);
+  //tag guestfs_set_identifier (g,(const char *) dom->name);  
   guestfs_set_trace (g, 0);
   guestfs_set_verbose (g,0);
   
@@ -911,16 +880,14 @@ static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
   fses = guestfs_list_filesystems (g);
   if (fses == NULL)
     return -1;
-
+  //tag
+  #define STRNEQ(a, b) (strcmp((a),(b)) != 0)
   for (i = 0; fses[i] != NULL; i += 2) {
     if (STRNEQ (fses[i+1], "") &&
         STRNEQ (fses[i+1], "swap") &&
         STRNEQ (fses[i+1], "unknown")) {
       const char *dev = fses[i];
-      CLEANUP_FREE_STATVFS struct guestfs_statvfs *stat = NULL;
-
-      if (verbose)
-        fprintf (stderr, "df_on_handle: %s dev %s\n", name, dev);
+      struct guestfs_statvfs *stat = NULL;
 
       /* Try mounting and stating the device.  This might reasonably
        * fail, so don't show errors.
@@ -935,11 +902,12 @@ static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
       guestfs_pop_error_handler (g);
 
       if (stat){
-	  	buinfo->capacity_total = (stat.blocks)*(stat.bsize);
-		buinfo->capacity_free = (stat.blocks)*(stat.frsize);
+	  	buinfo->capacity_total = (stat->blocks)*(stat->bsize);
+		buinfo->capacity_free = (stat->blocks)*(stat->frsize);
       }
     }
   }
+  return 0;
 }
 
 #ifdef HAVE_DOM_REASON
@@ -1000,69 +968,9 @@ static int get_block_stats(struct block_device *block_dev) {
     }                                                                          \
   } while (0)
 
-static int fs_info_notify(virDomainPtr domain, virDomainFSInfoPtr fs_info) {
-  notification_t notif;
-  int ret = 0;
-
-  /* Local struct, just for the purpose of this function. */
-  typedef struct nm_str_item_s {
-    const char *name;
-    const char *value;
-  } nm_str_item_t;
-
-  nm_str_item_t fs_dev_alias[fs_info->ndevAlias];
-  nm_str_item_t fs_str_items[] = {
-      {.name = "mountpoint", .value = fs_info->mountpoint},
-      {.name = "name", .value = fs_info->name},
-      {.name = "fstype", .value = fs_info->fstype}};
-
-  for (int i = 0; i < fs_info->ndevAlias; ++i) {
-    fs_dev_alias[i].name = "devAlias";
-    fs_dev_alias[i].value = fs_info->devAlias[i];
-  }
-
-  init_notif(&notif, domain, NOTIF_OKAY, "File system information",
-             "file_system", NULL);
-  NM_ADD_STR_ITEMS(fs_str_items, STATIC_ARRAY_SIZE(fs_str_items));
-  NM_ADD_ITEM(plugin_notification_meta_add_unsigned_int, "ndevAlias",
-              fs_info->ndevAlias);
-  NM_ADD_STR_ITEMS(fs_dev_alias, fs_info->ndevAlias);
-
-  plugin_dispatch_notification(&notif);
-
-cleanup:
-  if (notif.meta)
-    plugin_notification_meta_free(notif.meta);
-  return ret;
-}
 
 #undef RETURN_ON_ERR
 #undef NM_ADD_STR_ITEMS
-
-static int get_fs_info(virDomainPtr domain) {
-  virDomainFSInfoPtr *fs_info = NULL;
-  int ret = 0;
-
-  int mount_points_cnt = virDomainGetFSInfo(domain, &fs_info, 0);
-  if (mount_points_cnt == -1) {
-    ERROR(PLUGIN_NAME " plugin: virDomainGetFSInfo failed: %d",
-          mount_points_cnt);
-    return mount_points_cnt;
-  }
-
-  for (int i = 0; i < mount_points_cnt; ++i) {
-    if (fs_info_notify(domain, fs_info[i]) != 0) {
-      ERROR(PLUGIN_NAME " plugin: failed to send file system notification "
-                        "for mount point %s",
-            fs_info[i]->mountpoint);
-      ret = -1;
-    }
-    virDomainFSInfoFree(fs_info[i]);
-  }
-
-  sfree(fs_info);
-  return ret;
-}
 
 #endif /* HAVE_FS_INFO */
 
@@ -1099,11 +1007,6 @@ static int get_domain_metrics(domain_t *domain) {
   /* Gather remaining stats only for running domains */
   if (info.di.state != VIR_DOMAIN_RUNNING)
     return 0;
-
-#ifdef HAVE_DISK_ERR
-  if (extra_stats & ex_stats_disk_err)
-    GET_STATS(get_disk_err, "disk errors", domain->ptr);
-#endif
 
   /* Update cached virDomainInfo. It has to be done after cpu_submit */
   memcpy(&domain->info, &info.di, sizeof(domain->info));
@@ -1194,7 +1097,6 @@ static int lv_init_instance(size_t i, plugin_read_cb callback) {
 
 static void lv_clean_read_state(struct lv_read_state *state) {
   free_block_devices(state);
-  free_interface_devices(state);
   free_domains(state);
 }
 
@@ -1480,46 +1382,6 @@ static int refresh_lists(struct lv_read_instance *inst) {
           xpath_obj->nodesetval == NULL)
         goto cont;
 
-      xmlNodeSetPtr xml_interfaces = xpath_obj->nodesetval;
-
-      for (int j = 0; j < xml_interfaces->nodeNr; ++j) {
-        char *path = NULL;
-        char *address = NULL;
-        xmlNodePtr xml_interface;
-
-        xml_interface = xml_interfaces->nodeTab[j];
-        if (!xml_interface)
-          continue;
-
-        for (xmlNodePtr child = xml_interface->children; child;
-             child = child->next) {
-          if (child->type != XML_ELEMENT_NODE)
-            continue;
-
-          if (xmlStrEqual(child->name, (const xmlChar *)"target")) {
-            path = (char *)xmlGetProp(child, (const xmlChar *)"dev");
-            if (!path)
-              continue;
-          } else if (xmlStrEqual(child->name, (const xmlChar *)"mac")) {
-            address = (char *)xmlGetProp(child, (const xmlChar *)"address");
-            if (!address)
-              continue;
-          }
-        }
-
-        if (il_interface_devices &&
-            (ignore_device_match(il_interface_devices, name, path) != 0 ||
-             ignore_device_match(il_interface_devices, name, address) != 0))
-          goto cont3;
-
-        add_interface_device(state, dom, path, address, j + 1);
-      cont3:
-        if (path)
-          xmlFree(path);
-        if (address)
-          xmlFree(address);
-      }
-
     cont:
       if (xpath_obj)
         xmlXPathFreeObject(xpath_obj);
@@ -1611,61 +1473,6 @@ static int add_block_device(struct lv_read_state *state, virDomainPtr dom,
   return state->nr_block_devices++;
 }
 
-static void free_interface_devices(struct lv_read_state *state) {
-  if (state->interface_devices) {
-    for (int i = 0; i < state->nr_interface_devices; ++i) {
-      sfree(state->interface_devices[i].path);
-      sfree(state->interface_devices[i].address);
-      sfree(state->interface_devices[i].number);
-    }
-    sfree(state->interface_devices);
-  }
-  state->interface_devices = NULL;
-  state->nr_interface_devices = 0;
-}
-
-static int add_interface_device(struct lv_read_state *state, virDomainPtr dom,
-                                const char *path, const char *address,
-                                unsigned int number) {
-  struct interface_device *new_ptr;
-  int new_size =
-      sizeof(state->interface_devices[0]) * (state->nr_interface_devices + 1);
-  char *path_copy, *address_copy, number_string[15];
-
-  if ((path == NULL) || (address == NULL))
-    return EINVAL;
-
-  path_copy = strdup(path);
-  if (!path_copy)
-    return -1;
-
-  address_copy = strdup(address);
-  if (!address_copy) {
-    sfree(path_copy);
-    return -1;
-  }
-
-  snprintf(number_string, sizeof(number_string), "interface-%u", number);
-
-  if (state->interface_devices)
-    new_ptr = realloc(state->interface_devices, new_size);
-  else
-    new_ptr = malloc(new_size);
-
-  if (new_ptr == NULL) {
-    sfree(path_copy);
-    sfree(address_copy);
-    return -1;
-  }
-  state->interface_devices = new_ptr;
-  state->interface_devices[state->nr_interface_devices].dom = dom;
-  state->interface_devices[state->nr_interface_devices].path = path_copy;
-  state->interface_devices[state->nr_interface_devices].address = address_copy;
-  state->interface_devices[state->nr_interface_devices].number =
-      strdup(number_string);
-  return state->nr_interface_devices++;
-}
-
 static int ignore_device_match(ignorelist_t *il, const char *domname,
                                const char *devpath) {
   char *name;
@@ -1685,10 +1492,6 @@ static int ignore_device_match(ignorelist_t *il, const char *domname,
   sfree(name);
   return r;
 }
-/*
-static int libguestfs_clear(){
-  guestfs_close (g);
-}*/
 
 static int lv_shutdown(void) {
   for (int i = 0; i < nr_instances; ++i) {
@@ -1701,10 +1504,6 @@ static int lv_shutdown(void) {
   il_domains = NULL;
   ignorelist_free(il_block_devices);
   il_block_devices = NULL;
-  ignorelist_free(il_interface_devices);
-  il_interface_devices = NULL;
-
-  //libguestfs_clear();
   return 0;
 }
 
