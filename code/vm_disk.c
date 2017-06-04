@@ -844,12 +844,37 @@ static void lv_disconnect(void) {
   WARNING(PLUGIN_NAME " plugin: closed connection to libvirt");
 }
 //tag
+/**
+ * This function is called when a user invokes S<C<guestfish -d guest>>.
+ *
+ * Returns the number of drives added (S<C<E<gt> 0>>), or C<-1> for failure.
+ */
 int
-add_libvirt_drives (guestfs_h *g, virDomainPtr dom)
+add_libvirt_drives (guestfs_h *g, char *guest)
 {
-  return 0;
-}
+  struct guestfs_add_domain_argv optargs = { .bitmask = 0 };
+  /*
+  if (libvirt_uri) {
+    optargs.bitmask |= GUESTFS_ADD_DOMAIN_LIBVIRTURI_BITMASK;
+    optargs.libvirturi = libvirt_uri;
+  }*/
+  //if (read_only) {
+    optargs.bitmask |= GUESTFS_ADD_DOMAIN_READONLY_BITMASK;
+    optargs.readonly = 1;
+  //}
+  /*if (live) {
+    optargs.bitmask |= GUESTFS_ADD_DOMAIN_LIVE_BITMASK;
+    optargs.live = 1;
+  }*/
 
+  optargs.bitmask |= GUESTFS_ADD_DOMAIN_ALLOWUUID_BITMASK;
+  optargs.allowuuid = 1;
+
+  optargs.bitmask |= GUESTFS_ADD_DOMAIN_READONLYDISK_BITMASK;
+  optargs.readonlydisk = "read";
+
+  return guestfs_add_domain_argv (g, guest, &optargs);
+}
 
 static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
                                 struct lv_block_usage_info *buinfo) {
@@ -864,7 +889,7 @@ static int lv_domain_block_usage_info(virDomainPtr dom, const char *path,
     return -1;
   }
   add_libvirt_drives(g, dom);
-  //tag guestfs_set_identifier (g,(const char *) dom->name);  
+  tag guestfs_set_identifier (g, dom->name);  
   guestfs_set_trace (g, 0);
   guestfs_set_verbose (g,0);
   
