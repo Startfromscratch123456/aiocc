@@ -1,6 +1,6 @@
 /**
- * collectd - src/virt.c
- * Copyright (C) 2006-2008  Red Hat Inc.
+ * collectd - src/vm_disk.c
+ * Copyright (C) 2017-2022  Red Hat Inc.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -16,11 +16,31 @@
  * 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  *
  * Authors:
- *   Richard W.M. Jones <rjones@redhat.com>
+ *   dengshijun <dengshijun1992@gmail.com>
  **/
+#define _GNU_SOURCE
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/syscall.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
+#include <fcntl.h> /* For O_* constants */
+#include <semaphore.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <malloc.h>
+#include <math.h>
+#include <unistd.h>
+
+#include <unistd.h>
+#include <error.h>
+#include <stdint.h>
 
 #include "collectd.h"
-
 #include "common.h"
 #include "plugin.h"
 #include "utils_complain.h"
@@ -33,710 +53,762 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
-#include "guestfs.h"
+#include <guestfs.h>/*libguestfs*/
+
 /* Plugin name */
 #define PLUGIN_NAME "vm_disk"
 
-static const char *config_keys[] = {"Connection",
+#define STRNEQ(a, b) (strcmp((a),(b)) != 0)
 
-    "RefreshInterval",
+//每台虚拟机拥有的device的最大数量
+#define MAX_DEVNUM_PER_VM 64
+//存储虚拟机device信息的共享存储区域的大小
+#define MAX_VM_DISK_INFO_SHM_NUM 32
+//domain名的最大长度
+#define MAX_DOMAIN_NAME_LEN DATA_MAX_NAME_LEN
+//device名称的最大长度
+#define MAX_DEV_NAME_LEN 64
 
-    "Domain",
-    "BlockDevice",
-    "BlockDeviceFormat",
-    "BlockDeviceFormatBasename",
-    "InterfaceDevice",
-    "IgnoreSelected",
+/* HostnameFormat. */
+#define HF_MAX_FIELDS 3
 
-    "HostnameFormat",
-    "PluginInstanceFormat",
+/* ERROR(...) macro for vm_diskerrors. */
+#define VIRT_ERROR(conn, s)                                                    \
+		do {                                                                         \
+				virErrorPtr err;                                                           \
+				err = (conn) ? virConnGetLastError((conn)) : virGetLastError();            \
+				if (err)                                                                   \
+				ERROR("%s: %s", (s), err->message);                                      \
+		} while (0)
 
-    NULL};
+static const char *config_keys[] = { "Connection", "RefreshInterval",
+		"IgnoreSelected", "HostnameFormat", "PluginInstanceFormat",
+		NULL };
 #define NR_CONFIG_KEYS ((sizeof config_keys / sizeof config_keys[0]) - 1)
-
 /* Connection. */
 static virConnectPtr conn = 0;
 static char *conn_string = NULL;
 static c_complain_t conn_complain = C_COMPLAIN_INIT_STATIC;
 
 /* Seconds between list refreshes, 0 disables completely. */
-static int interval = 60;
+static int interval = 30;
 
 /* List of domains, if specified. */
 static ignorelist_t *il_domains = NULL;
-/* List of block devices, if specified. */
-static ignorelist_t *il_block_devices = NULL;
-
-static int ignore_device_match(ignorelist_t *, const char *domname,
-        const char *devpath);
 
 /* Actual list of domains found on last refresh. */
-static virDomainPtr *domains = NULL;
+
+//domains的名称和数量
+static char (*domains)[MAX_DOMAIN_NAME_LEN] = NULL;
 static int nr_domains = 0;
 
-static void free_domains(void);
-static int add_domain(virDomainPtr dom);
+//libguestfs信息采集循环流程控制
+static int collect_loop = 1;
 
-/* Actual list of block devices found on last refresh. */
-struct block_device {
-    virDomainPtr dom; /* domain */
-    char *path;       /* name of block device */
+/*虚拟机设备总容量/可用容量信息*/
+typedef struct vm_device_info_shm {
+	int dev_num; //设备的数量
+	int64_t device_usage_info[MAX_DEVNUM_PER_VM][2]; //0 total 1 free
+	char dev_name[MAX_DEVNUM_PER_VM][MAX_DEV_NAME_LEN]; //设备的名称
+	char domain_name[MAX_DOMAIN_NAME_LEN]; //虚拟机的名称
+}*vm_device_info_shm_ptr;
+
+static int vm_device_info_shmid;
+static struct vm_device_info_shm *vm_device_info_shmaddr;
+//libguestfs存储读取信息后存储到vm_device_info_shmaddr中的轮询下标
+static int mem_idx = 0;
+//进程同步
+static sem_t *sem_pv; /*定义Posix有名信号灯*/
+//进程控制相关
+const char * PV_NAME = "sem_pv";
+
+static void free_domains(void);
+static int add_domain(const char *);
+static int refresh_lists(void);
+static int vm_device_info_shmget(void);
+static void vm_device_info_shm_init(void);
+
+enum hf_field {
+	hf_none = 0, hf_hostname, hf_name, hf_uuid
 };
 
-static struct block_device *block_devices = NULL;
-static int nr_block_devices = 0;
-
-static void free_block_devices(void);
-static int add_block_device(virDomainPtr dom, const char *path);
-
-/* HostnameFormat. */
-#define HF_MAX_FIELDS 3
-
-enum hf_field { hf_none = 0, hf_hostname, hf_name, hf_uuid };
-
-static enum hf_field hostname_format[HF_MAX_FIELDS] = {hf_name};
+static enum hf_field hostname_format[HF_MAX_FIELDS] = { hf_name };
 
 /* PluginInstanceFormat */
 #define PLGINST_MAX_FIELDS 2
-
-enum plginst_field { plginst_none = 0, plginst_name, plginst_uuid };
+enum plginst_field {
+	plginst_none = 0, plginst_name, plginst_uuid
+};
 
 static enum plginst_field plugin_instance_format[PLGINST_MAX_FIELDS] = {
-    plginst_none};
-
-/* BlockDeviceFormat */
-enum bd_field { target, source };
-
-/* BlockDeviceFormatBasename */
-_Bool blockdevice_format_basename = 0;
-static enum bd_field blockdevice_format = target;
+		plginst_none };
 
 /* Time that we last refreshed. */
-static time_t last_refresh = (time_t)0;
+static time_t last_refresh = (time_t) 0;
 
-static int refresh_lists(void);
+/*调用libguestfs获取名称为domains[dom_no]的虚拟机的device的信息*/
+int update_disk_usage(int dom_no) {
+	char **devices = NULL;
+	char **fses = NULL;
+	char* dom = domains[dom_no];
+	guestfs_h *g;
 
-/* ERROR(...) macro for vm_diskerrors. */
-#define VIRT_ERROR(conn, s)                                                    \
-    do {                                                                         \
-        virErrorPtr err;                                                           \
-        err = (conn) ? virConnGetLastError((conn)) : virGetLastError();            \
-        if (err)                                                                   \
-        ERROR("%s: %s", (s), err->message);                                      \
-    } while (0)
+	g = guestfs_create();
 
-static void init_value_list(value_list_t *vl, virDomainPtr dom) {
-    int n;
-    const char *name;
-    char uuid[VIR_UUID_STRING_BUFLEN];
+	if (g == NULL) {
+		perror("vm_disk:failed to create libguestfs handle");
+		exit(EXIT_FAILURE);
+	}
 
-    sstrncpy(vl->plugin, PLUGIN_NAME, sizeof(vl->plugin));
+	guestfs_add_domain(g, (const char *) dom, GUESTFS_ADD_DOMAIN_READONLY, 1,
+			-1);
+	guestfs_set_identifier(g, (const char *) dom);
+	guestfs_set_trace(g, 0);
+	guestfs_set_verbose(g, 0);
 
-    vl->host[0] = '\0';
+	if (guestfs_launch(g) == -1) {
+		perror("vm_disk:guestfs_launch\n");
+		return -1;
+	}
 
-    /* Construct the hostname field according to HostnameFormat. */
-    for (int i = 0; i < HF_MAX_FIELDS; ++i) {
-        if (hostname_format[i] == hf_none)
-            continue;
+	devices = guestfs_list_devices(g);
 
-        n = DATA_MAX_NAME_LEN - strlen(vl->host) - 2;
+	if (devices == NULL) {
+		perror("vm_disk:guesfs_list_devices(g) == NULL");
+		return -1;
+	}
 
-        if (i > 0 && n >= 1) {
-            strncat(vl->host, ":", 1);
-            n--;
-        }
+	fses = guestfs_list_filesystems(g);
 
-        switch (hostname_format[i]) {
-            case hf_none:
-                break;
-            case hf_hostname:
-                strncat(vl->host, hostname_g, n);
-                break;
-            case hf_name:
-                name = virDomainGetName(dom);
-                if (name)
-                    strncat(vl->host, name, n);
-                break;
-            case hf_uuid:
-                if (virDomainGetUUIDString(dom, uuid) == 0)
-                    strncat(vl->host, uuid, n);
-                break;
-        }
-    }
+	if (fses == NULL) {
+		perror("vm_disk:guestfs_list_filesystem(g)");
+		return -1;
+	}
 
-    vl->host[sizeof(vl->host) - 1] = '\0';
+	int count = 0;
+	sem_wait(sem_pv);
 
-    /* Construct the plugin instance field according to PluginInstanceFormat. */
-    for (int i = 0; i < PLGINST_MAX_FIELDS; ++i) {
-        if (plugin_instance_format[i] == plginst_none)
-            continue;
+	for (int i = 0; fses[i] != NULL && count < MAX_VM_DISK_INFO_SHM_NUM; i +=
+			2) {
+		if (STRNEQ(fses[i + 1],
+				"") && STRNEQ(fses[i + 1], "swap") && STRNEQ(fses[i + 1], "unknown")) {
+			char *dev = fses[i];
 
-        n = sizeof(vl->plugin_instance) - strlen(vl->plugin_instance) - 2;
+			guestfs_push_error_handler(g, NULL, NULL);
 
-        if (i > 0 && n >= 1) {
-            strncat(vl->plugin_instance, ":", 1);
-            n--;
-        }
+			if (guestfs_mount_ro(g, dev, "/") == 0) {
+				struct guestfs_statvfs * stat = guestfs_statvfs(g, "/");
+				strncpy((vm_device_info_shmaddr[mem_idx].dev_name)[count], dev,
+						MAX_DEV_NAME_LEN);
+				(vm_device_info_shmaddr[mem_idx].device_usage_info)[count][0] =
+						(derive_t) stat->blocks;
+				(vm_device_info_shmaddr[mem_idx].device_usage_info)[count][1] =
+						(derive_t) stat->bfree;
+				fprintf(stderr,
+						"vm_disk:submit data to share memory,values=[mem_idx=%d,vm=%s,dev=%s,total=%ld,free=%ld]\n",
+						mem_idx, dom, dev,
+						(vm_device_info_shmaddr[mem_idx].device_usage_info)[count][0],
+						(vm_device_info_shmaddr[mem_idx].device_usage_info)[count][1]);
+				count++;
+				sfree(stat);
+			} else {
+				continue;
+			}
+		}
+	}
 
-        switch (plugin_instance_format[i]) {
-            case plginst_none:
-                break;
-            case plginst_name:
-                name = virDomainGetName(dom);
-                if (name)
-                    strncat(vl->plugin_instance, name, n);
-                break;
-            case plginst_uuid:
-                if (virDomainGetUUIDString(dom, uuid) == 0)
-                    strncat(vl->plugin_instance, uuid, n);
-                break;
-        }
-    }
-
-    vl->plugin_instance[sizeof(vl->plugin_instance) - 1] = '\0';
-
-} /* void init_value_list */
-
-static void submit(virDomainPtr dom, char const *type,
-        char const *type_instance, value_t *values,
-        size_t values_len) {
-    value_list_t vl = VALUE_LIST_INIT;
-    init_value_list(&vl, dom);
-
-    vl.values = values;
-    vl.values_len = values_len;
-
-    sstrncpy(vl.type, type, sizeof(vl.type));
-    if (type_instance != NULL)
-        sstrncpy(vl.type_instance, type_instance, sizeof(vl.type_instance));
-
-    plugin_dispatch_values(&vl);
+	strncpy(vm_device_info_shmaddr[mem_idx].domain_name, dom,
+			MAX_DOMAIN_NAME_LEN);
+	vm_device_info_shmaddr[mem_idx].dev_num = count;
+	mem_idx++;
+	mem_idx %= MAX_VM_DISK_INFO_SHM_NUM;
+	sem_post(sem_pv);
+	guestfs_close(g);
+	sfree(devices);
+	sfree(fses);
+	return 0;
 }
 
-static void submit_derive2(const char *type, derive_t v0, derive_t v1,
-        virDomainPtr dom, const char *devname) {
-    value_t values[] = {
-        {.derive = v0}, {.derive = v1},
-    };
+/*轮询获取在domains列表中虚拟机的device的信息*/
+int refresh_vm_disk_usage0() {
+	time_t t;
 
-    submit(dom, type, devname, values, STATIC_ARRAY_SIZE(values));
-} /* void submit_derive2 */
+	if (conn == NULL) {
+		/* `conn_string == NULL' is acceptable. */
+		conn = virConnectOpenReadOnly(conn_string);
 
-static int lv_init(void) {
-    if (virInitialize() != 0)
-        return -1;
-    else
-        return 0;
+		if (conn == NULL) {
+			c_complain(LOG_ERR, &conn_complain,
+			PLUGIN_NAME " plugin: Unable to connect: "
+			"virConnectOpenReadOnly failed.");
+			return -1;
+		}
+	}
+
+	c_release(LOG_NOTICE, &conn_complain,
+	PLUGIN_NAME " plugin: Connection established.");
+
+	time(&t);
+
+	/* Need to refresh domain or device lists? */
+	if ((last_refresh == (time_t) 0)
+			|| ((interval > 0) && ((last_refresh + interval) <= t))) {
+		if (refresh_lists() != 0) {
+			if (conn != NULL)
+				virConnectClose(conn);
+
+			conn = NULL;
+			return -1;
+		}
+
+		last_refresh = t;
+	}
+
+	for (int i = 0; i < nr_domains; ++i) {
+		update_disk_usage(i);
+	}
+
+	return 0;
 }
 
-static int lv_config(const char *key, const char *value) {
-    if (virInitialize() != 0)
-        return 1;
-
-    if (il_domains == NULL)
-        il_domains = ignorelist_create(1);
-    if (il_block_devices == NULL)
-        il_block_devices = ignorelist_create(1);
-
-    if (strcasecmp(key, "Connection") == 0) {
-        char *tmp = strdup(value);
-        if (tmp == NULL) {
-            ERROR(PLUGIN_NAME " plugin: Connection strdup failed.");
-            return 1;
-        }
-        sfree(conn_string);
-        conn_string = tmp;
-        return 0;
-    }
-
-    if (strcasecmp(key, "RefreshInterval") == 0) {
-        char *eptr = NULL;
-        interval = strtol(value, &eptr, 10);
-        if (eptr == NULL || *eptr != '\0')
-            return 1;
-        return 0;
-    }
-
-    if (strcasecmp(key, "Domain") == 0) {
-        if (ignorelist_add(il_domains, value))
-            return 1;
-        return 0;
-    }
-    if (strcasecmp(key, "BlockDevice") == 0) {
-        if (ignorelist_add(il_block_devices, value))
-            return 1;
-        return 0;
-    }
-
-    if (strcasecmp(key, "BlockDeviceFormat") == 0) {
-        if (strcasecmp(value, "target") == 0)
-            blockdevice_format = target;
-        else if (strcasecmp(value, "source") == 0)
-            blockdevice_format = source;
-        else {
-            ERROR(PLUGIN_NAME " plugin: unknown BlockDeviceFormat: %s", value);
-            return -1;
-        }
-        return 0;
-    }
-    if (strcasecmp(key, "BlockDeviceFormatBasename") == 0) {
-        blockdevice_format_basename = IS_TRUE(value);
-        return 0;
-    }
-
-    if (strcasecmp(key, "IgnoreSelected") == 0) {
-        if (IS_TRUE(value)) {
-            ignorelist_set_invert(il_domains, 0);
-            ignorelist_set_invert(il_block_devices, 0);
-        } else {
-            ignorelist_set_invert(il_domains, 1);
-            ignorelist_set_invert(il_block_devices, 1);
-        }
-        return 0;
-    }
-
-    if (strcasecmp(key, "HostnameFormat") == 0) {
-        char *value_copy;
-        char *fields[HF_MAX_FIELDS];
-        int n;
-
-        value_copy = strdup(value);
-        if (value_copy == NULL) {
-            ERROR(PLUGIN_NAME " plugin: strdup failed.");
-            return -1;
-        }
-
-        n = strsplit(value_copy, fields, HF_MAX_FIELDS);
-        if (n < 1) {
-            sfree(value_copy);
-            ERROR(PLUGIN_NAME " plugin: HostnameFormat: no fields");
-            return -1;
-        }
-
-        for (int i = 0; i < n; ++i) {
-            if (strcasecmp(fields[i], "hostname") == 0)
-                hostname_format[i] = hf_hostname;
-            else if (strcasecmp(fields[i], "name") == 0)
-                hostname_format[i] = hf_name;
-            else if (strcasecmp(fields[i], "uuid") == 0)
-                hostname_format[i] = hf_uuid;
-            else {
-                ERROR(PLUGIN_NAME " plugin: unknown HostnameFormat field: %s",
-                        fields[i]);
-                sfree(value_copy);
-                return -1;
-            }
-        }
-        sfree(value_copy);
-
-        for (int i = n; i < HF_MAX_FIELDS; ++i)
-            hostname_format[i] = hf_none;
-
-        return 0;
-    }
-
-    if (strcasecmp(key, "PluginInstanceFormat") == 0) {
-        char *value_copy;
-        char *fields[PLGINST_MAX_FIELDS];
-        int n;
-
-        value_copy = strdup(value);
-        if (value_copy == NULL) {
-            ERROR(PLUGIN_NAME " plugin: strdup failed.");
-            return -1;
-        }
-
-        n = strsplit(value_copy, fields, PLGINST_MAX_FIELDS);
-        if (n < 1) {
-            sfree(value_copy);
-            ERROR(PLUGIN_NAME " plugin: PluginInstanceFormat: no fields");
-            return -1;
-        }
-
-        for (int i = 0; i < n; ++i) {
-            if (strcasecmp(fields[i], "none") == 0) {
-                plugin_instance_format[i] = plginst_none;
-                break;
-            } else if (strcasecmp(fields[i], "name") == 0)
-                plugin_instance_format[i] = plginst_name;
-            else if (strcasecmp(fields[i], "uuid") == 0)
-                plugin_instance_format[i] = plginst_uuid;
-            else {
-                ERROR(PLUGIN_NAME " plugin: unknown PluginInstanceFormat field: %s",
-                        fields[i]);
-                sfree(value_copy);
-                return -1;
-            }
-        }
-        sfree(value_copy);
-
-        for (int i = n; i < PLGINST_MAX_FIELDS; ++i)
-            plugin_instance_format[i] = plginst_none;
-
-        return 0;
-    }
-
-    /* Unrecognised option. */
-    return -1;
+/*循环刷新*/
+static void refresh_vm_disk_usage() {
+	int seep_time = interval;
+	int unit_time = 5; //获取一台虚拟机相关信息所耗费的时间:默认为5s
+	while (collect_loop) {
+		refresh_vm_disk_usage0();
+		seep_time = interval - unit_time * nr_domains;
+		if (seep_time > 0) {
+			sleep(seep_time); //单位是秒
+		}
+	}
 }
 
-//tag
-/**
- * This function is called when a user invokes S<C<guestfish -d guest>>.
- *
- * Returns the number of drives added (S<C<E<gt> 0>>), or C<-1> for failure.
- */
-    int
-add_libvirt_drives (guestfs_h *g,const char *guest)
-{
-    struct guestfs_add_domain_argv optargs = { .bitmask = 0 };
-    /*
-       if (libvirt_uri) {
-       optargs.bitmask |= GUESTFS_ADD_DOMAIN_LIBVIRTURI_BITMASK;
-       optargs.libvirturi = libvirt_uri;
-       }*/
-    //if (read_only) {
-    optargs.bitmask |= GUESTFS_ADD_DOMAIN_READONLY_BITMASK;
-    optargs.readonly = 1;
-    //}
-    /*if (live) {
-      optargs.bitmask |= GUESTFS_ADD_DOMAIN_LIVE_BITMASK;
-      optargs.live = 1;
-      }*/
+/*采集流程:先刷新虚拟机列表存放到domains,根据domains中的数据进行一趟轮询查询*/
+static int start_collect_work() {
+	int pid = 0;
+	vm_device_info_shmget();
 
-    optargs.bitmask |= GUESTFS_ADD_DOMAIN_ALLOWUUID_BITMASK;
-    optargs.allowuuid = 1;
+	sem_pv = sem_open(PV_NAME, O_CREAT, 0644, 1);
+	pid = fork();
 
-    optargs.bitmask |= GUESTFS_ADD_DOMAIN_READONLYDISK_BITMASK;
-    optargs.readonlydisk = "read";
+	if (pid == 0) {
+		vm_device_info_shmaddr = (struct vm_device_info_shm *) shmat(
+				vm_device_info_shmid, NULL, 0);
+		vm_device_info_shm_init();
 
-    return guestfs_add_domain_argv (g, guest, &optargs);
+		if (vm_device_info_shmaddr == (void*) (-1)) {
+			perror("vm_disk:shmat addr error!\n");
+			return -1;
+		}
+
+		fprintf(stderr,
+				"vm_disk:process collects data from virtual machines pid=%d  ppid=%d\n",
+				getpid(), getppid());
+		refresh_vm_disk_usage();
+	} else if (pid > 0) {
+		vm_device_info_shmaddr = (struct vm_device_info_shm*) shmat(
+				vm_device_info_shmid, NULL, 0);
+		vm_device_info_shm_init();
+
+		if (vm_device_info_shmaddr == (void*) (-1)) {
+			perror("vm_disk:shmat addr error!\n");
+			return -1;
+		}
+
+		fprintf(stderr,
+				"vm_disk:process submits data to collectd pid=%d  ppid=%d\n",
+				getpid(), getppid());
+	} else {
+		fprintf(stderr, "vm_disk:fork error\n");
+		return -1;
+	}
+
+	return 0;
 }
 
-static int lv_read(void) {
-    time_t t;
-    char **devices = NULL;
-    char **fses = NULL;
-    int capacity_total;
-    int capacity_free;
-    char *type_instance = NULL;
-    guestfs_h *g; 
+static int vir_init(void) {
+	if (virInitialize() != 0)
+		return -1;
 
-    if (conn == NULL) {
-        /* `conn_string == NULL' is acceptable. */
-        conn = virConnectOpenReadOnly(conn_string);
-        if (conn == NULL) {
-            c_complain(LOG_ERR, &conn_complain,
-                    PLUGIN_NAME " plugin: Unable to connect: "
-                    "virConnectOpenReadOnly failed.");
-            return -1;
-        }
-    }
-    c_release(LOG_NOTICE, &conn_complain,
-            PLUGIN_NAME " plugin: Connection established.");
+	return 0;
+}
+/*共享内存申请*/
+static int vm_device_info_shmget(void) {
+	vm_device_info_shmid = shmget(IPC_PRIVATE,
+			sizeof(struct vm_device_info_shm) * MAX_VM_DISK_INFO_SHM_NUM,
+			IPC_CREAT | 0600);
 
-    time(&t);
+	if (vm_device_info_shmid < 0) {
+		perror("vm_disk:get shm id error!\n");
+		exit(1);
+	}
 
-    /* Need to refresh domain or device lists? */
-    if ((last_refresh == (time_t)0) ||
-            ((interval > 0) && ((last_refresh + interval) <= t))) {
-        if (refresh_lists() != 0) {
-            if (conn != NULL)
-                virConnectClose(conn);
-            conn = NULL;
-            return -1;
-        }
-        last_refresh = t;
-    }
+	return 0;
+}
 
-    for (int i = 0; i < nr_domains; ++i) {
-        g = guestfs_create ();
-        if (g == NULL) {
-            perror ("guestfs_create");
-            return -1;
-        }
+/*初始化存储虚拟机device信息的存储区域*/
+static void vm_device_info_shm_init() {
 
-        add_libvirt_drives(g,  virDomainGetName((domains[i])));
-        guestfs_set_identifier (g,  virDomainGetName((domains[i]))); 
-        guestfs_set_trace (g, 0);
-        guestfs_set_verbose (g,0);
+	for (int i = 0; i < MAX_VM_DISK_INFO_SHM_NUM; i++) {
+		for (int j = 0; j < MAX_DEVNUM_PER_VM; j++) {
+			(vm_device_info_shmaddr[i].device_usage_info)[j][0] = -1;
+			(vm_device_info_shmaddr[i].device_usage_info)[j][1] = -1;
+			strcpy(vm_device_info_shmaddr[i].dev_name[j], "");
+		}
 
-        if (guestfs_launch (g) == -1) {
-            perror ("guestfs_launch");
-            return -1;
-        }
+		strcpy(vm_device_info_shmaddr[i].domain_name, "");
+		vm_device_info_shmaddr[i].dev_num = 0;
+	}
 
-        devices = guestfs_list_devices (g);
-        if (devices == NULL)
-            return -1;
+	mem_idx = 0;
+}
 
-        fses = guestfs_list_filesystems (g);
-        if (fses == NULL)
-            return -1;
-        //tag
-#define STRNEQ(a, b) (strcmp((a),(b)) != 0)
-        for (i = 0; fses[i] != NULL; i += 2) {
-            if (STRNEQ (fses[i+1], "") &&
-                    STRNEQ (fses[i+1], "swap") &&
-                    STRNEQ (fses[i+1], "unknown")) {
-                const char *dev = fses[i];
-                struct guestfs_statvfs *stat = NULL;
+static int vm_disk_config(const char *key, const char *value) {
+	if (virInitialize() != 0)
+		return 1;
 
-                /* Try mounting and stating the device.  This might reasonably
-                 * fail, so don't show errors.
-                 */
-                guestfs_push_error_handler (g, NULL, NULL);
+	if (il_domains == NULL)
+		il_domains = ignorelist_create(1);
 
-                if (guestfs_mount_ro (g, dev, "/") == 0) {
-                    stat = guestfs_statvfs (g, "/");
-                    guestfs_umount_all (g);
-                }
-                guestfs_pop_error_handler (g);
-                if (!stat){
-                    continue;
-                }
-                capacity_total = (stat->blocks)*(stat->bsize);
-                capacity_free = (stat->blocks)*(stat->frsize);
-                type_instance = NULL;
-                if (blockdevice_format_basename && blockdevice_format == source)
-                    type_instance = strdup(basename(block_devices[i].path));
-                else
-                    type_instance = strdup(block_devices[i].path);
-                if ((capacity_total != -1) && (capacity_free != -1))
-                    submit_derive2("vm_disk_usage", (derive_t)capacity_total, (derive_t)capacity_free,
-                            block_devices[i].dom, type_instance);
-                sfree(type_instance);
-            }
-        }  } 
-    return 0;
+	if (strcasecmp(key, "Connection") == 0) {
+		char *tmp = strdup(value);
+
+		if (tmp == NULL) {
+			ERROR(PLUGIN_NAME " plugin: Connection strdup failed.");
+			return 1;
+		}
+
+		sfree(conn_string);
+		conn_string = tmp;
+		return 0;
+	}
+
+	if (strcasecmp(key, "RefreshInterval") == 0) {
+		char *eptr = NULL;
+		interval = strtol(value, &eptr, 10);
+
+		if (eptr == NULL || *eptr != '\0')
+			return 1;
+
+		return 0;
+	}
+
+	if (strcasecmp(key, "Domain") == 0) {
+		if (ignorelist_add(il_domains, value))
+			return 1;
+
+		return 0;
+	}
+
+	if (strcasecmp(key, "HostnameFormat") == 0) {
+		char *value_copy;
+		char *fields[HF_MAX_FIELDS];
+		int n;
+
+		value_copy = strdup(value);
+
+		if (value_copy == NULL) {
+			ERROR(PLUGIN_NAME " plugin: strdup failed.");
+			return -1;
+		}
+
+		n = strsplit(value_copy, fields, HF_MAX_FIELDS);
+
+		if (n < 1) {
+			sfree(value_copy);
+			ERROR(PLUGIN_NAME " plugin: HostnameFormat: no fields");
+			return -1;
+		}
+
+		for (int i = 0; i < n; ++i) {
+			if (strcasecmp(fields[i], "hostname") == 0)
+				hostname_format[i] = hf_hostname;
+			else if (strcasecmp(fields[i], "name") == 0)
+				hostname_format[i] = hf_name;
+			else if (strcasecmp(fields[i], "uuid") == 0)
+				hostname_format[i] = hf_uuid;
+			else {
+				ERROR(PLUGIN_NAME " plugin: unknown HostnameFormat field: %s",
+						fields[i]);
+				sfree(value_copy);
+				return -1;
+			}
+		}
+
+		sfree(value_copy);
+
+		for (int i = n; i < HF_MAX_FIELDS; ++i)
+			hostname_format[i] = hf_none;
+
+		return 0;
+	}
+
+	if (strcasecmp(key, "PluginInstanceFormat") == 0) {
+		char *value_copy;
+		char *fields[PLGINST_MAX_FIELDS];
+		int n;
+
+		value_copy = strdup(value);
+
+		if (value_copy == NULL) {
+			ERROR(PLUGIN_NAME " plugin: strdup failed.");
+			return -1;
+		}
+
+		n = strsplit(value_copy, fields, PLGINST_MAX_FIELDS);
+
+		if (n < 1) {
+			sfree(value_copy);
+			ERROR(PLUGIN_NAME " plugin: PluginInstanceFormat: no fields");
+			return -1;
+		}
+
+		for (int i = 0; i < n; ++i) {
+			if (strcasecmp(fields[i], "none") == 0) {
+				plugin_instance_format[i] = plginst_none;
+				break;
+			} else if (strcasecmp(fields[i], "name") == 0)
+				plugin_instance_format[i] = plginst_name;
+			else if (strcasecmp(fields[i], "uuid") == 0)
+				plugin_instance_format[i] = plginst_uuid;
+			else {
+				ERROR(
+						PLUGIN_NAME " plugin: unknown PluginInstanceFormat field: %s",
+						fields[i]);
+				sfree(value_copy);
+				return -1;
+			}
+		}
+
+		sfree(value_copy);
+
+		for (int i = n; i < PLGINST_MAX_FIELDS; ++i)
+			plugin_instance_format[i] = plginst_none;
+
+		return 0;
+	}
+
+	/* Unrecognised option. */
+	return -1;
 }
 
 static int refresh_lists(void) {
-    int n;
+	int n;
 
-    n = virConnectNumOfDomains(conn);
-    if (n < 0) {
-        VIRT_ERROR(conn, "reading number of domains");
-        return -1;
-    }
+	n = virConnectNumOfDomains(conn);
 
-    if (n > 0) {
-        int *domids;
+	if (n < 0) {
+		VIRT_ERROR(conn, "reading number of domains");
+		return -1;
+	}
 
-        /* Get list of domains. */
-        domids = malloc(sizeof(*domids) * n);
-        if (domids == NULL) {
-            ERROR(PLUGIN_NAME " plugin: malloc failed.");
-            return -1;
-        }
+	if (n > 0) {
+		int *domids;
 
-        n = virConnectListDomains(conn, domids, n);
-        if (n < 0) {
-            VIRT_ERROR(conn, "reading list of domains");
-            sfree(domids);
-            return -1;
-        }
+		/* Get list of domains. */
+		domids = malloc(sizeof(*domids) * n);
 
-        free_block_devices();
-        free_domains();
+		if (domids == NULL) {
+			ERROR(PLUGIN_NAME " plugin: malloc failed.");
+			return -1;
+		}
 
-        /* Fetch each domain and add it to the list, unless ignore. */
-        for (int i = 0; i < n; ++i) {
-            virDomainPtr dom = NULL;
-            const char *name;
-            char *xml = NULL;
-            xmlDocPtr xml_doc = NULL;
-            xmlXPathContextPtr xpath_ctx = NULL;
-            xmlXPathObjectPtr xpath_obj = NULL;
+		n = virConnectListDomains(conn, domids, n);
 
-            dom = virDomainLookupByID(conn, domids[i]);
-            if (dom == NULL) {
-                VIRT_ERROR(conn, "virDomainLookupByID");
-                /* Could be that the domain went away -- ignore it anyway. */
-                continue;
-            }
+		if (n < 0) {
+			VIRT_ERROR(conn, "reading list of domains");
+			sfree(domids);
+			return -1;
+		}
 
-            name = virDomainGetName(dom);
-            if (name == NULL) {
-                VIRT_ERROR(conn, "virDomainGetName");
-                goto cont;
-            }
+		free_domains();
 
-            if (il_domains && ignorelist_match(il_domains, name) != 0)
-                goto cont;
+		/* Fetch each domain and add it to the list, unless ignore. */
+		for (int i = 0; i < n; ++i) {
+			virDomainPtr dom = NULL;
+			const char *name;
+			char *xml = NULL;
+			xmlDocPtr xml_doc = NULL;
+			xmlXPathContextPtr xpath_ctx = NULL;
+			xmlXPathObjectPtr xpath_obj = NULL;
 
-            if (add_domain(dom) < 0) {
-                ERROR(PLUGIN_NAME " plugin: malloc failed.");
-                goto cont;
-            }
+			dom = virDomainLookupByID(conn, domids[i]);
 
-            /* Get a list of devices for this domain. */
-            xml = virDomainGetXMLDesc(dom, 0);
-            if (!xml) {
-                VIRT_ERROR(conn, "virDomainGetXMLDesc");
-                goto cont;
-            }
+			if (dom == NULL) {
+				VIRT_ERROR(conn, "virDomainLookupByID");
+				/* Could be that the domain went away -- ignore it anyway. */
+				continue;
+			}
 
-            /* Yuck, XML.  Parse out the devices. */
-            xml_doc = xmlReadDoc((xmlChar *)xml, NULL, NULL, XML_PARSE_NONET);
-            if (xml_doc == NULL) {
-                VIRT_ERROR(conn, "xmlReadDoc");
-                goto cont;
-            }
+			name = virDomainGetName(dom);
 
-            xpath_ctx = xmlXPathNewContext(xml_doc);
+			if (name == NULL) {
+				VIRT_ERROR(conn, "virDomainGetName");
+				goto cont;
+			}
 
-            /* Block devices. */
-            char *bd_xmlpath = "/domain/devices/disk/target[@dev]";
-            if (blockdevice_format == source)
-                bd_xmlpath = "/domain/devices/disk/source[@dev]";
-            xpath_obj = xmlXPathEval((xmlChar *)bd_xmlpath, xpath_ctx);
+			if (il_domains && ignorelist_match(il_domains, name) != 0)
+				goto cont;
 
-            if (xpath_obj == NULL || xpath_obj->type != XPATH_NODESET ||
-                    xpath_obj->nodesetval == NULL)
-                goto cont;
+			if (add_domain(name) < 0) {
+				ERROR(PLUGIN_NAME " plugin: malloc failed.");
+				goto cont;
+			}
 
-            for (int j = 0; j < xpath_obj->nodesetval->nodeNr; ++j) {
-                xmlNodePtr node;
-                char *path = NULL;
+			cont:
 
-                node = xpath_obj->nodesetval->nodeTab[j];
-                if (!node)
-                    continue;
-                path = (char *)xmlGetProp(node, (xmlChar *)"dev");
-                if (!path)
-                    continue;
+			if (xpath_obj)
+				xmlXPathFreeObject(xpath_obj);
 
-                if (il_block_devices &&
-                        ignore_device_match(il_block_devices, name, path) != 0)
-                    goto cont2;
+			if (xpath_ctx)
+				xmlXPathFreeContext(xpath_ctx);
 
-                add_block_device(dom, path);
-cont2:
-                if (path)
-                    xmlFree(path);
-            }
-            xmlXPathFreeObject(xpath_obj);
+			if (xml_doc)
+				xmlFreeDoc(xml_doc);
 
-cont:
-            if (xpath_obj)
-                xmlXPathFreeObject(xpath_obj);
-            if (xpath_ctx)
-                xmlXPathFreeContext(xpath_ctx);
-            if (xml_doc)
-                xmlFreeDoc(xml_doc);
-            sfree(xml);
-        }
+			sfree(xml);
+		}
 
-        sfree(domids);
-    }
+		sfree(domids);
+	}
 
-    return 0;
+	return 0;
 }
 
 static void free_domains(void) {
-    if (domains) {
-        for (int i = 0; i < nr_domains; ++i)
-            virDomainFree(domains[i]);
-        sfree(domains);
-    }
-    domains = NULL;
-    nr_domains = 0;
+	sfree(domains);
+	domains = NULL;
+	nr_domains = 0;
 }
 
-static int add_domain(virDomainPtr dom) {
-    virDomainPtr *new_ptr;
-    int new_size = sizeof(domains[0]) * (nr_domains + 1);
+static int add_domain(const char * dom) {
+	char (*new_ptr)[MAX_DOMAIN_NAME_LEN];
+	int new_size = sizeof(char) * MAX_DOMAIN_NAME_LEN * (nr_domains + 1);
 
-    if (domains)
-        new_ptr = realloc(domains, new_size);
-    else
-        new_ptr = malloc(new_size);
+	if (domains)
+		new_ptr = realloc(domains, new_size);
+	else
+		new_ptr = malloc(new_size);
 
-    if (new_ptr == NULL)
-        return -1;
+	if (new_ptr == NULL)
+		return -1;
 
-    domains = new_ptr;
-    domains[nr_domains] = dom;
-    return nr_domains++;
+	domains = new_ptr;
+	strncpy(domains[nr_domains], dom,
+			MIN(MAX_DOMAIN_NAME_LEN - 1, strlen(dom)));
+	domains[nr_domains][MIN(MAX_DOMAIN_NAME_LEN - 1, strlen(dom))] = '\0';
+	return nr_domains++;
 }
 
-static void free_block_devices(void) {
-    if (block_devices) {
-        for (int i = 0; i < nr_block_devices; ++i)
-            sfree(block_devices[i].path);
-        sfree(block_devices);
-    }
-    block_devices = NULL;
-    nr_block_devices = 0;
+static void init_value_list(value_list_t *vl, virDomainPtr dom) {
+	int n;
+	const char *name;
+	char uuid[VIR_UUID_STRING_BUFLEN];
+
+	sstrncpy(vl->plugin, PLUGIN_NAME, sizeof(vl->plugin));
+
+	vl->host[0] = '\0';
+
+	for (int i = 0; i < HF_MAX_FIELDS; ++i) {
+		if (hostname_format[i] == hf_none)
+			continue;
+
+		n = DATA_MAX_NAME_LEN - strlen(vl->host) - 2;
+
+		if (i > 0 && n >= 1) {
+			strncat(vl->host, ":", 1);
+			n--;
+		}
+
+		switch (hostname_format[i]) {
+		case hf_none:
+			break;
+
+		case hf_hostname:
+			strncat(vl->host, hostname_g, n);
+			break;
+
+		case hf_name:
+			name = virDomainGetName(dom);
+
+			if (name)
+				strncat(vl->host, name, n);
+
+			break;
+
+		case hf_uuid:
+			if (virDomainGetUUIDString(dom, uuid) == 0)
+				strncat(vl->host, uuid, n);
+
+			break;
+		}
+	}
+
+	vl->host[sizeof(vl->host) - 1] = '\0';
+
+	for (int i = 0; i < PLGINST_MAX_FIELDS; ++i) {
+		if (plugin_instance_format[i] == plginst_none)
+			continue;
+
+		n = sizeof(vl->plugin_instance) - strlen(vl->plugin_instance) - 2;
+
+		if (i > 0 && n >= 1) {
+			strncat(vl->plugin_instance, ":", 1);
+			n--;
+		}
+
+		switch (plugin_instance_format[i]) {
+		case plginst_none:
+			break;
+
+		case plginst_name:
+			name = virDomainGetName(dom);
+
+			if (name)
+				strncat(vl->plugin_instance, name, n);
+
+			break;
+
+		case plginst_uuid:
+			if (virDomainGetUUIDString(dom, uuid) == 0)
+				strncat(vl->plugin_instance, uuid, n);
+
+			break;
+		}
+	}
+
+	vl->plugin_instance[sizeof(vl->plugin_instance) - 1] = '\0';
+
+}
+static void submit(virDomainPtr dom, char const *type,
+		char const *type_instance, value_t *values, size_t values_len) {
+	value_list_t vl = VALUE_LIST_INIT;
+	init_value_list(&vl, dom);
+
+	vl.values = values;
+	vl.values_len = values_len;
+
+	sstrncpy(vl.type, type, sizeof(vl.type));
+
+	if (type_instance != NULL)
+		sstrncpy(vl.type_instance, type_instance, sizeof(vl.type_instance));
+
+	plugin_dispatch_values(&vl);
 }
 
-static int add_block_device(virDomainPtr dom, const char *path) {
-    struct block_device *new_ptr;
-    int new_size = sizeof(block_devices[0]) * (nr_block_devices + 1);
-    char *path_copy;
+static void submit_derive2(const char *type, derive_t v0, derive_t v1,
+		virDomainPtr dom, const char *devname) {
+	value_t values[] = { { .derive = v0 }, { .derive = v1 }, };
 
-    path_copy = strdup(path);
-    if (!path_copy)
-        return -1;
-
-    if (block_devices)
-        new_ptr = realloc(block_devices, new_size);
-    else
-        new_ptr = malloc(new_size);
-
-    if (new_ptr == NULL) {
-        sfree(path_copy);
-        return -1;
-    }
-    block_devices = new_ptr;
-    block_devices[nr_block_devices].dom = dom;
-    block_devices[nr_block_devices].path = path_copy;
-    return nr_block_devices++;
+	submit(dom, type, devname, values, STATIC_ARRAY_SIZE(values));
 }
 
-static int ignore_device_match(ignorelist_t *il, const char *domname,
-        const char *devpath) {
-    char *name;
-    int n, r;
+/*读取数据到collectd*/
+static int vm_disk_read() {
+	time_t t;
 
-    if ((domname == NULL) || (devpath == NULL))
-        return 0;
+	if (conn == NULL) {
+		/* `conn_string == NULL' is acceptable. */
+		conn = virConnectOpenReadOnly(conn_string);
 
-    n = sizeof(char) * (strlen(domname) + strlen(devpath) + 2);
-    name = malloc(n);
-    if (name == NULL) {
-        ERROR(PLUGIN_NAME " plugin: malloc failed.");
-        return 0;
-    }
-    ssnprintf(name, n, "%s:%s", domname, devpath);
-    r = ignorelist_match(il, name);
-    sfree(name);
-    return r;
+		if (conn == NULL) {
+			c_complain(LOG_ERR, &conn_complain,
+			PLUGIN_NAME " plugin: Unable to connect: "
+			"virConnectOpenReadOnly failed.");
+			return -1;
+		}
+	}
+
+	c_release(LOG_NOTICE, &conn_complain,
+	PLUGIN_NAME " plugin: Connection established.");
+
+	time(&t);
+
+	/* Need to refresh domain or device lists? */
+	if ((last_refresh == (time_t) 0)
+			|| ((interval > 0) && ((last_refresh + interval) <= t))) {
+		if (refresh_lists() != 0) {
+			if (conn != NULL)
+				virConnectClose(conn);
+
+			conn = NULL;
+			return -1;
+		}
+
+		last_refresh = t;
+	}
+
+	sem_wait(sem_pv);
+	for (int i = 0; i < MAX_VM_DISK_INFO_SHM_NUM; i++) {
+		/*检测vm_device_info_shm v是否有效:有效返回1,否则返回0*/
+		if (vm_device_info_shmaddr[i].dev_num == 0
+				|| strlen(vm_device_info_shmaddr[i].domain_name) == 0) {
+			continue;
+		}
+
+		virDomainPtr dom = virDomainLookupByName(conn,
+				vm_device_info_shmaddr[i].domain_name);
+
+		if (dom == NULL) {
+			continue; //这里不上面的语句合并是因为上面可以避免无效的.domain_name
+		}
+
+		for (int j = 0; j < vm_device_info_shmaddr[i].dev_num; j++) {
+			if ((vm_device_info_shmaddr[i].device_usage_info)[j][0] != -1
+					&& (vm_device_info_shmaddr[i].device_usage_info)[j][1] != -1
+					&& strlen((vm_device_info_shmaddr[i].dev_name)[j]) != 0) {
+				submit_derive2("vm_disk",
+						(vm_device_info_shmaddr[i].device_usage_info)[j][0],
+						(vm_device_info_shmaddr[i].device_usage_info)[j][1],
+						dom, (vm_device_info_shmaddr[i].dev_name)[j]);
+				fprintf(stderr,
+						"vm_disk:submit data collectd,values=[vm=%s,dev=%s,total=%ld,free=%ld]\n",
+						vm_device_info_shmaddr[i].domain_name,
+						(vm_device_info_shmaddr[i].dev_name)[j],
+						(vm_device_info_shmaddr[i].device_usage_info)[j][0],
+						(vm_device_info_shmaddr[i].device_usage_info)[j][1]);
+				//提交数据后,清空相关数据区域,避免重复提交数据,后面有类似操作
+				(vm_device_info_shmaddr[i].device_usage_info)[j][0] =
+						(vm_device_info_shmaddr[i].device_usage_info)[j][1] =
+								-1;
+			}
+
+			strcpy(vm_device_info_shmaddr[i].dev_name[j], "");
+			vm_device_info_shmaddr[i].dev_num = 0;
+		}
+
+		strcpy(vm_device_info_shmaddr[i].domain_name, "");
+	}
+
+	sem_post(sem_pv);
+	return 0;
 }
 
-static int lv_shutdown(void) {
-    free_block_devices();
-    free_domains();
+static int vm_disk_shutdown(void) {
+	free_domains();
+	collect_loop = 0;
 
-    if (conn != NULL)
-        virConnectClose(conn);
-    conn = NULL;
+	if (conn != NULL)
+		virConnectClose(conn);
 
-    ignorelist_free(il_domains);
-    il_domains = NULL;
-    ignorelist_free(il_block_devices);
-    il_block_devices = NULL;
-    return 0;
+	conn = NULL;
+	ignorelist_free(il_domains);
+	il_domains = NULL;
+	shmdt(vm_device_info_shmaddr);
+	shmctl(vm_device_info_shmid, IPC_RMID, NULL);
+	sem_destroy(sem_pv);
+	return 0;
 }
 
 void module_register(void) {
-    plugin_register_config(PLUGIN_NAME, lv_config, config_keys, NR_CONFIG_KEYS);
-    plugin_register_init(PLUGIN_NAME, lv_init);
-    plugin_register_read(PLUGIN_NAME, lv_read);
-    plugin_register_shutdown(PLUGIN_NAME, lv_shutdown);
+	plugin_register_config(PLUGIN_NAME, vm_disk_config, config_keys,
+			NR_CONFIG_KEYS);
+	plugin_register_init(PLUGIN_NAME, vir_init);
+	plugin_register_read(PLUGIN_NAME, vm_disk_read);
+	fprintf(stderr, "vm_disk:module_register:pid=%d  ppid=%d\n", getpid(),
+			getppid());
+	start_collect_work();
+	plugin_register_shutdown(PLUGIN_NAME, vm_disk_shutdown);
 }
 
-/*
- * vim: shiftwidth=4 tabstop=8 softtabstop=4 expandtab fdm=marker
- */
