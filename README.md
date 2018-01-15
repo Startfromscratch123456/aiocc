@@ -6,7 +6,7 @@ Automatic I/O congestion control(AIOCC)
 [![Progress](http://progressed.io/bar/80?title=completed)]()
 
 
-# [点击访问AIOCC主页](http://www.dengshijun.cn/aiocc.jsp)
+# [点击访问AIOCC主页](http://www.dengshijun.cn/?p=207)
 
 在HPC存储系统和云存储系统中，为了实现高性能和高并行，一个I/O操作通常被分割为若干个请求序列，同时将这些请求发送到服务器端，导致存储系统中涌现大量资源竞争，如存储带宽。HPC存储系统和云存储系统中，通常会有成百上千个客户端，运行各类应用，每个应用会发送一定数量的I/O请求。因此存储系统中会充斥着大量的请求，资源竞争十分激烈。
 
@@ -38,7 +38,7 @@ Automatic I/O congestion control(AIOCC)
 
 **AIOCC说明**
 
-AIOCC说明是在Lustre2.8+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)、[ASCAR](https://github.com/mlogic/ascar-lustre-sharp)基础上开发的。AIOCC针对的是CentOS7（Linux kernel 3.10.0-327.el7.x86_64）和Lustre2.8.0，其它版本的系统使用本工具可能需要解决一些兼容性问题。另外，CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.8.0全套安装文件。
+AIOCC说明是在Lustre2.8+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)、[ASCAR](https://github.com/mlogic/ascar-lustre-sharp)、CAPES基础上开发的。AIOCC针对的是CentOS7（Linux kernel 3.10.0-327.el7.x86_64）和Lustre2.8.0，其它版本的系统使用本工具可能需要解决一些兼容性问题。另外，CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.8.0全套安装文件。
 ## 反馈与建议
 - QQ：946057490
 - 邮箱：<dengshijun1992@gmail.com> <sjdeng@hust.edu.cn>
