@@ -1,10 +1,10 @@
 #!/bin/bash
 # POSIX
 #
-#description:    install lustre server
+#description:    install lustre server 2.9
 #     author:    ShijunDeng
 #      email:    dengshijun1992@gmail.com
-#       time:    2016-07-24
+#       time:    2018-01-20
 
 #initialization
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
@@ -22,34 +22,30 @@ print_message "MULTEXU_INFO" "install dependencies..."
 cd ${MULTEXU_SOURCE_INSTALL_DIR}
 print_message "MULTEXU_INFO" "enter directory ${MULTEXU_SOURCE_INSTALL_DIR}..."
 
-rpm -ivh lustre-modules* --nodeps --force
+yum remove libss -y
 wait
-rpm -e --nodeps `rpm -qa | grep  libcom_err`
+rpm -ivh libcom_err-1.42.13.wc6-7.el7.x86_64.rpm --nodeps --force
 wait
-rpm -Uvh libcom_err*
+rpm -ivh libcom_err-devel-1.42.13.wc6-7.el7.x86_64.rpm
 wait
-
-rpm -e --nodeps `rpm -qa | grep   e2fsprogs-libs`
+rpm -ivh  e2fsprogs-libs-1.42.13.wc6-7.el7.x86_64.rpm --nodeps --force
 wait
-rpm -Uvh  e2fsprogs-libs*
+rpm -ivh  e2fsprogs-devel-1.42.13.wc6-7.el7.x86_64.rpm
 wait
-
-rpm -e --nodeps `rpm -qa | grep  e2fsprogs-[^lib]*`
+rpm -ivh libss-1.42.13.wc6-7.el7.x86_64.rpm --nodeps --force
 wait
-rpm -Uvh e2fsprogs-[^lib]*  --nodeps --force
+rpm -ivh libss-devel-1.42.13.wc6-7.el7.x86_64.rpm 
 wait
-
-rpm -Uvh libss*  --nodeps --force
+rpm -ivh  e2fsprogs-1.42.13.wc6-7.el7.x86_64.rpm --nodeps --force
 wait
 
-#rpm -ivh lustre-ldiskfs*  --nodeps --force
-#wait
-rpm -ivh lustre-osd-ldiskfs-2.8.0*  --nodeps --force
+rpm -ivh lustre-osd-ldiskfs-mount-2.9.0*.rpm --force --nodeps
 wait
-rpm -ivh lustre-osd-ldiskfs-mount* --nodeps --force
+rpm -ivh kmod-lustre-2.9.0*.rpm --force --nodeps
 wait
-
-rpm -ivh lustre-2.8.0* --nodeps --force
+rpm -ivh kmod-lustre-osd-ldiskfs-2.9.0*.rpm --force --nodeps
+wait
+rpm -ivh lustre-2.9.0*.rpm  --force --nodeps
 wait
 #lustre-modules-2.8.0-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64.x86_64 has missing requires of kernel = ('0', '3.10.0', '3.10.0-327.3.1.el7_lustre')
 #yum clean all &&yum update glibc glibc-headers glibc-devel nscd && yum update

@@ -37,6 +37,8 @@ cd pip-9.0.1/
 python setup.py install
 
 ln -s /usr/local/python3.5.2/bin/pip /usr/bin/pip
+#升级
+pip install --upgrade pip
 
 print_message "MULTEXU_INFO" "Leaving directory ${MULTEXU_SOURCE_TOOL_DIR}..."
 print_message "MULTEXU_INFO" "finished to install pip..."

@@ -18,6 +18,8 @@ fi
 #声明环境变量
 export PATH="/usr/lib/qt-3.3/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin"
 export LANG="en_US.UTF-8"
+wait_util_cluster_host_available "nodes_all.out"  ${sleeptime} ${limit}
+wait_util_cluster_ssh_enabled "nodes_all.out"  ${sleeptime} ${limit}
 #生成管理机的公私钥
 ssh-keygen
 #设置管理机的相关目录权限

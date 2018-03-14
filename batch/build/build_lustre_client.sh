@@ -4,13 +4,10 @@
 #description:    build lustre 2.8.0 automaticlly [lustre client]
 #     author:    ShijunDeng
 #      email:    dengshijun1992@gmail.com
-#       time:    2016-09-08
+#       time:    2018-01-19
 #
+
 #initialization
-
-sleeptime=60 #设置检测的睡眠时间
-limit=10 #递减下限
-
 cd "$( dirname "${BASH_SOURCE[0]}" )" #get  a Bash script tell what directory it's stored in
 if [ ! -f ../ctrl/__init.sh ]; then
     echo "MULTEXU Error:initialization failure:cannot find the file __init.sh... "
@@ -23,6 +20,12 @@ fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 clear_execute_statu_signal
+
+sleeptime=60 #设置检测的睡眠时间
+limit=10 #递减下限
+#计算程序运行的时间
+start_time=$(date +%s%N)
+start_time_ms=${start_time:0:16}
 
 #
 #if you login in the system as root, after this command,then you will enter /root directory
@@ -55,13 +58,9 @@ done
 
 if [ ${skip_install_dependency} -eq 0 ];then 
     print_message "MULTEXU_INFO" "install dependencies..."  
-
     #
     #             yum -y install quilt
     #
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/newt-devel-0.52.15-4.el7.x86_64.rpm
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/slang-devel-2.2.4-11.el7.x86_64.rpm
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/asciidoc-8.6.8-5.el7.noarch.rpm
     yum --nogpgcheck localinstall ${MULTEXU_SOURCE_BUILD_DIR}/newt-devel-0.52.15-4.el7.x86_64.rpm ${MULTEXU_SOURCE_BUILD_DIR}/slang-devel-2.2.4-11.el7.x86_64.rpm  ${MULTEXU_SOURCE_BUILD_DIR}/asciidoc-8.6.8-5.el7.noarch.rpm 
     sleep ${sleeptime}s
     yum -y groupinstall "Development Tools"
@@ -95,15 +94,21 @@ if [ ${skip_install_dependency} -eq 0 ];then
     yum -y install ncurses-devel 
     `${PAUSE_CMD}`
     yum -y install pesign 
+    `${PAUSE_CMD}`
+    yum -y install linux-firmware
+    `${PAUSE_CMD}`
     yum -y install numactl-devel 
+    `${PAUSE_CMD}`
+    yum -y install bc
     `${PAUSE_CMD}`
     yum -y install pciutils-devel 
     `${PAUSE_CMD}`
-    yum -y install quilt
-    sleep ${sleeptime}s
-    wait
-
-    #wget https://mirrors.ustc.edu.cn/fedora/epel/7/x86_64/e/epel-release-7-8.noarch.rpm
+    yum -y install linux-firmware
+    `${PAUSE_CMD}`
+    yum -y install xfsprogs
+    `${PAUSE_CMD}`
+    yum -y install kmod 
+    `${PAUSE_CMD}`
     rpm -ivh ${MULTEXU_SOURCE_BUILD_DIR}/epel-release-7-8.noarch.rpm 
 fi
 
@@ -128,11 +133,21 @@ sh ${MULTEXU_BATCH_BUILD_DIR}/_patch_lustre.sh
 `${PAUSE_CMD}`
 
 #注意--with-linux指定的位置
-./configure --with-linux="${BUILD_BASE_DIR}"/BUILD/kernel-3.10.0_3.10.0_327.3.1.el7_lustre.x86_64/ --disable-server  
+wait
+./configure --with-linux="${BUILD_BASE_DIR}"/BUILD/kernel-3.10.0_lustre.x86_64/ --disable-server  
+wait
 make rpms -j8
 print_message "MULTEXU_INFO" "finished to make rpms (client) ..."
 `${PAUSE_CMD}`
 send_execute_statu_signal "${MULTEXU_STATUS_EXECUTE}"
+
+end_time=$(date +%s%N)
+end_time_ms=${end_time:0:16}
+#scale=6
+time_cost=0
+time_cost=`echo "scale=6;($end_time_ms - $start_time_ms)/1000000" | bc` 
+print_message "MULTEXU_INFO" "Total time spent:${time_cost} s"
+
 exit 0
 
 

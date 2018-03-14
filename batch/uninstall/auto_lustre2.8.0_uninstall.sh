@@ -46,7 +46,8 @@ print_message "MULTEXU_INFO" "Now start to uninstall lustre 2.8.0 ..."
 #检测和节点的状态：是否可达  ssh端口22是否启用
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --test_host_available=nodes_all.out
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --test_host_ssh_enabled=nodes_all.out
-`${PAUSE_CMD}`
+wait_util_cluster_host_available "nodes_all.out"  ${sleeptime} ${limit}
+wait_util_cluster_ssh_enabled "nodes_all.out"  ${sleeptime} ${limit}
 
 #清除信号量  避免干扰
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"

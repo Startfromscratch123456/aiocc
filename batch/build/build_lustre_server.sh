@@ -1,10 +1,10 @@
 #!/bin/bash
 # POSIX
 #
-#description:    build lustre 2.8.0 automaticlly [lustre server]
+#description:    build lustre 2.9.0 automaticlly [lustre server]
 #     author:    ShijunDeng
 #      email:    dengshijun1992@gmail.com
-#       time:    2016-09-01
+#       time:    2018-01-19
 #
 #initialization
 
@@ -56,15 +56,11 @@ done
 cd kernel
 if [ ${skip_install_dependency} -eq 0 ];then 
     print_message "MULTEXU_INFO" "install dependencies..."  
-
     #
     #             yum -y install quilt
     #
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/newt-devel-0.52.15-4.el7.x86_64.rpm
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/slang-devel-2.2.4-11.el7.x86_64.rpm
-    #wget http://mirror.centos.org/centos/7/os/x86_64/Packages/asciidoc-8.6.8-5.el7.noarch.rpm
     yum --nogpgcheck localinstall ${MULTEXU_SOURCE_BUILD_DIR}/newt-devel-0.52.15-4.el7.x86_64.rpm ${MULTEXU_SOURCE_BUILD_DIR}/slang-devel-2.2.4-11.el7.x86_64.rpm  ${MULTEXU_SOURCE_BUILD_DIR}/asciidoc-8.6.8-5.el7.noarch.rpm 
-    sleep ${sleeptime}s
+   sleep ${sleeptime}s
     yum -y groupinstall "Development Tools"
     sleep ${sleeptime}s
     yum -y install xmlto 
@@ -96,15 +92,21 @@ if [ ${skip_install_dependency} -eq 0 ];then
     yum -y install ncurses-devel 
     `${PAUSE_CMD}`
     yum -y install pesign 
+    `${PAUSE_CMD}`
+    yum -y install linux-firmware
+    `${PAUSE_CMD}`
     yum -y install numactl-devel 
+    `${PAUSE_CMD}`
+    yum -y install bc
     `${PAUSE_CMD}`
     yum -y install pciutils-devel 
     `${PAUSE_CMD}`
-    yum -y install quilt
-    sleep ${sleeptime}s
-    wait
-
-    #wget https://mirrors.ustc.edu.cn/fedora/epel/7/x86_64/e/epel-release-7-8.noarch.rpm
+    yum -y install linux-firmware
+    `${PAUSE_CMD}`
+    yum -y install xfsprogs
+    `${PAUSE_CMD}`
+    yum -y install kmod 
+    `${PAUSE_CMD}`
     rpm -ivh ${MULTEXU_SOURCE_BUILD_DIR}/epel-release-7-8.noarch.rpm 
 fi
 

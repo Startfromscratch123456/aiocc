@@ -20,9 +20,8 @@ clear_execute_statu_signal
 
 sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
 print_message "MULTEXU_INFO" "set SELINUX=disabled"
-systemctl stop firewalld
-#systemctl stop firewalld.service && sudo systemctl disable firewalld.service
-systemctl mask firewalld
+systemctl stop firewalld.service #停止firewall
+systemctl disable firewalld.service #禁止firewall开机启动
 #Then, install the iptables-services package:
 yum -y install iptables-services
 #Enable the service at boot-time:
@@ -34,6 +33,8 @@ systemctl stop iptables
 service iptables save
 #    or   /usr/libexec/iptables/iptables.init save
 #chkconfig iptables off
+chkconfig iptables off
+
 print_message "MULTEXU_INFO" "disable iptables firewall... "
 #service iptables stop
 print_message "MULTEXU_INFO" "service iptables stoped ..."

@@ -7,3 +7,9 @@
 - nodes_client.out：参见设计文档
 - nodes_oss.out：参见设计文档
 - nodes_server.out：参见设计文档
+- multexu.signal:信号量文件
+
+
+---
+##注意
+- ip列表文件必须是一个ip一行，不要添加其他任何注释以及无关信息，也不要加多余的空行

@@ -36,7 +36,7 @@ clear_execute_statu_signal
 clear_execute_statu_signal ${AIOCC_EXECUTE_SIGNAL_FILE}
 #系统的位数
 OS_TYPE="X64"
-MAX_INT=2147483648
+AX_INT=2147483648
 #目录设置
 #rule根目录
 AIOCC_RULE_DATABASE_DIR=""

@@ -93,6 +93,8 @@ get_parameter $@
 
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --test_host_available=nodes_all.out
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --test_host_ssh_enabled=nodes_all.out
+wait_util_cluster_host_available "nodes_all.out"  ${sleeptime} ${limit}
+wait_util_cluster_ssh_enabled "nodes_all.out"  ${sleeptime} ${limit}
 `${PAUSE_CMD}`
 #清除信号量  避免干扰
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"

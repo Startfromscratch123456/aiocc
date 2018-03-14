@@ -184,6 +184,26 @@ echo read_bandwidth: 76 > d.import
 echo write_bandwidth: 98 >> d.import
 
 
+yum -y install lrzsz
+yum -y install g++
+yum groupinstall "Development Libraries" -y
+yum  groupinstall "Development Tools"
+yum install ncurses-devel zlib-devel texinfo gtk+-devel gtk2-devel qt-devel tcl-devel tk-devel libX11-devel kernel-headers kernel-devel -y
+yum install -y rpcbind
+yum -y install vim
+yum -y install ifconfig
+yum -y install net-tools
+service rpcbind start
+yum install -y rpcbind
+rpm -ql rpcbind
+service rpcbind start
+yum install -y nfs-utils
+rpm -ql nfs-utils
+service nfs start
+mkdir /mnt/share
+mount -t nfs 192.168.3.181:/home/ca21/DevelopmentFiles/ /mnt/share
+
+
 
 
 

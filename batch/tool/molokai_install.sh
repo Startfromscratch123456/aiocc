@@ -20,7 +20,7 @@ source "${MULTEXU_BATCH_CRTL_DIR}"/multexu_lib.sh #调入multexu库
 # Reset all variables that might be set
 yum -y install vim
 molokai_gitaddr='fihttps://github.com/tomasr/molokai.git'
-MOLOKAI_DIR="molokai"
+OLOKAI_DIR="molokai"
 echo "MULTEXU INFO: install molokai automatically..."
 `${PAUSE_CMD}`
 
