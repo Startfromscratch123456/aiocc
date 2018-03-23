@@ -18,6 +18,9 @@ fi
 
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"  
 
+start_time=$(date +%s%N)
+start_time_ms=${start_time:0:16}
+
 #时间同步服务器
 time_syn_clock=192.168.3.104
 
@@ -38,24 +41,31 @@ directory="/mnt/lustre/test"
 direct=0
 iodepth=2
 allow_mounted_write=1
-ioengine="sync"
-special_cmd="-rwmixread=50" #随机IO时的一些特殊参数
-size="1024M"
-numjobs=1
-runtime=300
+ioengine_name=("sync")
+special_cmd="-rwmixread=" #随机IO时的一些特殊参数
+size="2G"
+numjobs=2
+runtime=600
 name="aiocc_test"
 
 blocksize_start=1
 blocksize_end=2048
 blocksize_multi_step=2
+
+rwmixread_start=5
+rwmixread_end=95
+rwmixread_add_step=5
+
 #设置检测测试是否结束的时间以及检测的下限
-checktime_init=120
-checktime_lower_limit=60
+checktime_init=180
+checktime_lower_limit=90
 #IO方式
 declare -a rw_array;#Type of I/O pattern. 
 
 #fio的读写方式
-rw_array=("randrw" "readwrite" "write" "randwrite" "read" "randread")
+rw_array=("randrw" "readwrite")
+#rw_array=("randrw" "readwrite" "write" "randwrite" "read" "randread")
+
 #获取客户端的ip地址,只需要其中一个即可,用作向服务器发命令,清除测试产生的文件
 client_ip=`cat ${MULTEXU_BATCH_CONFIG_DIR}/nodes_client.out | head -1`
 
@@ -146,64 +156,81 @@ print_message "MULTEXU_INFO" "the script clear_var_log_messages.sh is running in
 #开始测试
 #
 print_message "MULTEXU_INFO" "now start the test processes..."
-for policy in ${policy_name[*]}
+for ioengine in ${ioengine_name[*]}
 do
-    #修改调度器 并显示修改后的调度器名称  注意调度器实际命令需要引号 故传入的参数需要转义
-    #sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_oss.out --supercmd="lctl set_param ost.OSS.ost_io.nrs_policies=\"${policy/-/ }\""
-    #print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
-    for rw_pattern in ${rw_array[*]}
+    for policy in ${policy_name[*]}
     do
-        #测试结果的存放目录
-        dirname="${result_dir}/${rw_pattern}"
-        auto_mkdir "${dirname}" "weak"
-        
-        print_message "MULTEXU_ECHO" "    rw_array:${rw_pattern}"
-        for ((blocksize=${blocksize_start} ;blocksize <= ${blocksize_end}; blocksize*=${blocksize_multi_step}))
+        #修改调度器 并显示修改后的调度器名称  注意调度器实际命令需要引号 故传入的参数需要转义
+        #sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_oss.out --supercmd="lctl set_param ost.OSS.ost_io.nrs_policies=\"${policy/-/ }\""
+        #print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
+        for rw_pattern in ${rw_array[*]}
         do
-            if [ x`$EXIT_SIGNAL` = x"EXIT" ];then
-                print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
-                exit 0
-            fi
-            print_message "MULTEXU_ECHO" "        start a test..."   
+            #测试结果的存放目录
+            dirname="${result_dir}/${ioengine}/${rw_pattern}"
+            auto_mkdir "${dirname}" "weak"
             
-            special_cmd_io_choice=
-            
-            if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
-                special_cmd_io_choice=${special_cmd}
-            fi
-
-            cmd_var="${MULTEXU_SOURCE_TOOL_DIR}/fio/fio -direct=${direct} -iodepth ${iodepth} -thread -rw=${rw_pattern} ${special_cmd_io_choice} -allow_mounted_write=${allow_mounted_write} -ioengine=${ioengine} -bs=${blocksize}k -size=${size} -numjobs=${numjobs} -runtime=${runtime} -group_reporting -name=${name}"
-            print_message "MULTEXU_ECHO" "        test command:${cmd_var}"
-            #删除测试文件
-            sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -rf ${directory}/*"
-            
-            ####时间同步
-            #sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="rdate -s ${time_syn_clock}"
-            ####
-            
-            sleep ${sleeptime}s
-            #测试结果文件名称,组成方式:读写模式-调度器-块大小-k.txt
-            filename="${rw_pattern}-${policy}-${blocksize}-k.txt"
-            touch "${dirname}/${filename}"
-            `${PAUSE_CMD}`    
-            echo "${cmd_var}" > ${dirname}/${filename}
-            #测试结果写入文件
-            sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh "${MULTEXU_BATCH_TEST_DIR}"/_test_exe.sh \"${cmd_var}\" \"${directory}\"" >> ${dirname}/${filename}
-            #检测测试是否完成
-            ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
-            #清除标记
-            sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"            
-            print_message "MULTEXU_ECHO" "        finish this test..."
-            `${PAUSE_CMD}`
-        done #blocksize
-    done #rw_pattern
-done #policy
+            print_message "MULTEXU_ECHO" "    rw_array:${rw_pattern}"
+            for ((blocksize=${blocksize_start}; blocksize<=${blocksize_end}; blocksize*=${blocksize_multi_step}))
+            do
+                if [ x`$EXIT_SIGNAL` = x"EXIT" ];then
+                    print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
+                    exit 0
+                fi
+                print_message "MULTEXU_ECHO" "        start a test..."   
+                            
+                for ((rwmixread=${rwmixread_start}; rwmixread<=${rwmixread_end}; rwmixread+=${rwmixread_add_step}))
+                do
+                    special_cmd_io_choice=
+                    if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
+                        special_cmd_io_choice="${special_cmd}${rwmixread}"
+                    else
+                        #跳出循环
+                        rwmixread=$(( ${rwmixread_end} * 2 ))
+                    fi
+                    cmd_var="${MULTEXU_SOURCE_TOOL_DIR}/fio/fio -direct=${direct} -iodepth ${iodepth} -thread -rw=${rw_pattern} ${special_cmd_io_choice} -allow_mounted_write=${allow_mounted_write} -ioengine=${ioengine} -bs=${blocksize}k -size=${size} -numjobs=${numjobs} -runtime=${runtime} -group_reporting -name=${name}"
+                    print_message "MULTEXU_ECHO" "        test command:${cmd_var}"
+                    #删除测试文件
+                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -rf ${directory}/*"
+                    
+                    ####时间同步
+                    #sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="rdate -s ${time_syn_clock}"
+                    ####
+                    
+                    sleep ${sleeptime}s
+                    #测试结果文件名称,组成方式:读写模式-调度器-块大小k-混合读写比例.txt
+                    if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
+                        filename="${rw_pattern}-${policy}-${blocksize}k-${rwmixread}.txt"
+                    else
+                        filename="${rw_pattern}-${policy}-${blocksize}k.txt"
+                    fi
+                    touch "${dirname}/${filename}"
+                    `${PAUSE_CMD}`    
+                    echo "${cmd_var}" > ${dirname}/${filename}
+                    #测试结果写入文件
+                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh "${MULTEXU_BATCH_TEST_DIR}"/_test_exe.sh \"${cmd_var}\" \"${directory}\"" >> ${dirname}/${filename}
+                    #检测测试是否完成
+                    ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
+                    #清除标记
+                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"            
+                    print_message "MULTEXU_ECHO" "        finish this test..."
+                    `${PAUSE_CMD}`
+                done #rwmixread
+            done #blocksize
+        done #rw_pattern
+    done #policy
+done #ioengine
 
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"
 #清除测试产生的垃圾文件
-sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -f ${directory}/*"
+sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -rf ${directory}/*"
 echo "false" > ${MULTEXU_BATCH_TEST_DIR}/_clear_var_log_messages.cfg
 `${PAUSE_CMD}`
 print_message "MULTEXU_INFO" "all test jobs has been finished..."
+
+end_time=$(date +%s%N)
+end_time_ms=${end_time:0:16}
+#scale=6
+time_cost=0
+time_cost=`echo "scale=6;($end_time_ms - $start_time_ms)/1000000" | bc`
 
 exit 0

@@ -18,6 +18,10 @@ fi
 source "${MULTEXU_BATCH_CRTL_DIR}"/multexu_lib.sh #调入multexu库
 clear_execute_statu_signal 
 
+#计算程序运行的时间
+start_time=$(date +%s%N)
+start_time_ms=${start_time:0:16}
+
 sleeptime=60 #设置检测的睡眠时间
 limit=10 #递减下限
 #文件系统所在的设备名称
@@ -146,7 +150,6 @@ sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="service i
 print_message "MULTEXU_INFO" "the nodes which its ip in nodes_all.out closed the Firewall..."
 `${PAUSE_CMD}`
 
-
 #配置mgs node
 print_message "MULTEXU_INFO" "configure mdsnode[${mdsnode}] ..."
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${mdsnode} --cmd="sh ${MULTEXU_BATCH_DEPLOY_DIR}/__configure_mdsnode.sh -d ${devname}${devindex} -i 0 -m mdt"
@@ -172,4 +175,11 @@ print_message "MULTEXU_INFO" "finished configuring client nodes ..."
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"
 send_execute_statu_signal "${MULTEXU_STATUS_EXECUTE}"
 print_message "MULTEXU_INFO" "the lustre filesystem has been established..."
+
+end_time=$(date +%s%N)
+end_time_ms=${end_time:0:16}
+#scale=6
+time_cost=0
+time_cost=`echo "scale=6;($end_time_ms - $start_time_ms)/1000000" | bc`
+print_message "MULTEXU_INFO" "Total time spent:${time_cost} s"
 exit 0

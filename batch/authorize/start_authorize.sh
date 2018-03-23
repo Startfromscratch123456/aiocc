@@ -14,7 +14,7 @@ if [ ! -f ../ctrl/__init.sh ]; then
 else
     source ../ctrl/__init.sh
 fi
-
+source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 #声明环境变量
 export PATH="/usr/lib/qt-3.3/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin"
 export LANG="en_US.UTF-8"

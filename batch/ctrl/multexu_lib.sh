@@ -185,7 +185,7 @@ function ssh_check_cluster_status()
         if [ $count -eq $node_nums ]; then
             break
         else
-            print_message "MULTEXU_INFO" "waiting for nodes which its ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
+            print_message "MULTEXU_INFO" "waiting for nodes which it ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
             sleep ${sleeptime}s
             if [ $sleeptime -gt $limit ]; then
                 let sleeptime/=2
@@ -223,14 +223,14 @@ function wait_util_cluster_host_available()
         if [ $count -eq $node_nums ]; then
             break
         else
-            print_message "MULTEXU_INFO" "waiting for nodes which its ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
+            print_message "MULTEXU_INFO" "waiting for nodes which it ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
             sleep ${sleeptime}s
             if [ $sleeptime -gt $limit ]; then
                 let sleeptime/=2
             fi
         fi
     done
-    print_message "MULTEXU_INFO" "all nodes which its ip in ${iptable} signal are available..."
+    print_message "MULTEXU_INFO" "all nodes which is ip in ${iptable} signal are available..."
 }
 
 #
@@ -261,14 +261,14 @@ function wait_util_cluster_ssh_enabled()
         if [ $count -eq $node_nums ]; then
             break
         else
-            print_message "MULTEXU_INFO" "waiting for nodes which its ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
+            print_message "MULTEXU_INFO" "waiting for nodes which it ip in ${iptable} signal [${status}],the next check time will be ${sleeptime}s later..."
             sleep ${sleeptime}s
             if [ $sleeptime -gt $limit ]; then
                 let sleeptime/=2
             fi
         fi
     done
-    print_message "MULTEXU_INFO" "all nodes which its ip in ${iptable} signal are enabled..."
+    print_message "MULTEXU_INFO" "all nodes which it ip in ${iptable} signal are enabled..."
 }
 
 #
