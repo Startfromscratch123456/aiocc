@@ -24,6 +24,9 @@ fi
 source "${MULTEXU_BATCH_CRTL_DIR}/multexu_lib.sh"
 clear_execute_statu_signal 
 
+start_time=$(date +%s%N)
+start_time_ms=${start_time:0:16}
+
 #是否需要安装内核
 skip_install_kernel=0
 while :;
@@ -115,3 +118,11 @@ print_message "MULTEXU_INFO" "finish installing process..."
 `${PAUSE_CMD}`
 send_execute_statu_signal "${MULTEXU_STATUS_EXECUTE}"
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_all.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"
+
+end_time=$(date +%s%N)
+end_time_ms=${end_time:0:16}
+#scale=6
+time_cost=0
+time_cost=`echo "scale=6;($end_time_ms - $start_time_ms)/1000000" | bc`
+print_message "MULTEXU_INFO" "Total time spent:${time_cost} s"
+

@@ -47,7 +47,7 @@ fi
 #
 #格式化lustre文件系统
 #
-mkfs.lustre --fsname=lustrefs --mgs --mdt --index=$index $devname
+mkfs.lustre --fsname=lustrefs --reformat --mgs --mdt --index=$index $devname
 wait
 
 auto_mkdir "/mnt/${mnt_position}" "weak" 

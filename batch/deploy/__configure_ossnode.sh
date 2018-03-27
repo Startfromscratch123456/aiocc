@@ -54,7 +54,7 @@ ip=`ifconfig|grep "inet addr:"|grep -v "127.0.0.1"|cut -d: -f2|awk '{print $1}'`
 #
 #这里注意参数的名字一致 mdsnode=mdsnode
 #
-mkfs.lustre --fsname=lustrefs --mgsnode=$mdsnode@tcp --ost --index=$index $devname
+mkfs.lustre --fsname=lustrefs --mgsnode=$mdsnode@tcp --ost --reformat  --index=$index $devname
 wait
 
 auto_mkdir "/mnt/${mnt_position}" "weak" 

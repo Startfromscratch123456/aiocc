@@ -87,7 +87,7 @@ wait_util_cluster_ssh_enabled "nodes_all.out"  ${sleeptime} ${limit}
 
 `${PAUSE_CMD}`
 #卸载指定位置上已有的lustre文件系统(防止以前在该指定设备上装过lustre文件系统)
-sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_server.out --cmd="umount -t lustre ${devname}${devindex}"
+sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_server.out --cmd="umount -t lustre ${devname}${devindex} && echo yes |mkfs.ext4 ${devname}${devindex}"
 #同样的原因,卸载client
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="umount -t lustre /mnt/lustre"
 

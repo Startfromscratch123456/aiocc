@@ -2,4 +2,4 @@ if [ ! -d /mnt/share ]; then
     mkdir -p /mnt/share
 fi
 
-mount -t nfs 192.168.3.181:/home/development /mnt/share
+mount -t nfs 192.168.3.4:/home/development /mnt/share

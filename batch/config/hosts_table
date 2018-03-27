@@ -1,7 +1,7 @@
-192.168.122.11 node11.aiocc node11.aiocc
-192.168.122.12 node12.aiocc node12.aiocc
-192.168.122.13 node13.aiocc node13.aiocc
-192.168.122.14 node14.aiocc node14.aiocc
-192.168.122.15 node15.aiocc node15.aiocc
-192.168.122.16 node16.aiocc node16.aiocc
-192.168.122.17 node17.aiocc node17.aiocc
+192.168.3.166 aiocc.node.ca06 aiocc.node.ca06
+192.168.3.167 aiocc.node.ca07 aiocc.node.ca07
+192.168.3.181 aiocc.node.ca21 aiocc.node.ca21
+192.168.3.182 aiocc.node.ca22 aiocc.node.ca22
+192.168.3.187 aiocc.node.ca27 aiocc.node.ca27
+192.168.3.188 aiocc.node.ca28 aiocc.node.ca28
+192.168.3.104 aiocc.node.vm01 aiocc.node.vm01

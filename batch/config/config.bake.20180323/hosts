@@ -1,0 +1,9 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+192.168.122.11 node11.aiocc node11.aiocc
+192.168.122.12 node12.aiocc node12.aiocc
+192.168.122.13 node13.aiocc node13.aiocc
+192.168.122.14 node14.aiocc node14.aiocc
+192.168.122.15 node15.aiocc node15.aiocc
+192.168.122.16 node16.aiocc node16.aiocc
+192.168.122.17 node17.aiocc node17.aiocc
