@@ -1,0 +1,193 @@
+#多节点批量重启
+i=1; while [ $i -le 7 ]; do virsh start node1$i; let i++; done
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd=reboot
+#停掉节点中的fio进程 注意这里要使用单引号 要不然$会本地执行
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_client.out --cmd='kill -9 $(pidof fio)'
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/AIOCC'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/AIOCC --location=/home/development
+
+#全自动化编译
+sh /home/development/AIOCC/batch/ctrl/auto_lustre_2.8.0.sh --install_lmt=0 --skip_build_kernel=1 --goto_compile=1 --only_pre=1
+sh /home/development/AIOCC/batch/ctrl/auto_lustre_2.8.0.sh --only_pre=1
+#半自动化编译
+sh /home/development/AIOCC/batch/build/build_lustre_server.sh --skip_install_dependency=1
+rm -f /home/development/AIOCC/source/install/lustre-*
+cp /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*.rpm /home/development/AIOCC/source/install/ 
+sh /home/development/AIOCC/batch/build/build_lustre_client.sh --skip_install_dependency=1
+rm -rf /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*
+
+#lustre 单节点上文件系统部署相关命令
+mkfs.lustre --fsname=lustrefs --mgs --mdt --index=0 /dev/vda7
+mkfs.lustre --fsname=lustrefs --mdsnode=192.168.122.15@tcp --ost --index=0 /dev/vda7
+mount -t lustre /dev/vda7 /mnt/lustre
+mkdir /mnt/ost1 && mount -t lustre /dev/vda7 /mnt/ost1/
+mount -t lustre 192.168.122.15@tcp:/lustrefs /mnt/lustre
+#xshell传送文件软件安装
+yum install lrzsz
+
+#安装lmt
+yum -y install libtool-ltdl-devel glibc-common libtool autoconf automake mysql-devel expat-devel 
+yum -y install openssl098e
+yum -y install perl-Date-Manip
+# restart Cerebro on  Lustre servers
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='/sbin/service cerebrod restart'
+sh /home/development/AIOCC/batch/lmt/lmt_install.sh --mdsnode=192.168.122.15
+
+#重启cerebrod
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_server.out --cmd='/etc/init.d/cerebrod restart'
+
+lctl set_param ost.OSS.ost_io.nrs_tbf_rule="start computenodes{192.168.3.161@tcp} 1000"
+lctl set_param ost.OSS.ost_io.nrs_tbf_rule="start fio_user0 {qos_test.0} 1000"
+sh /home/development/AIOCC/batch/uninstall/auto_lustre2.8.0_uninstall.sh --skip_uninstall_kernel=1
+#centos7修改主机名
+hostnamectl --static set-hostname
+
+cd /home/development/AIOCC/batch
+
+scp -rp /home/development/AIOCC root@192.168.122.101:/home/development/
+cp /root/kernel/rpmbuild/BUILD/lustre-2.8.0/*.rpm /home/development/AIOCC/source/install/ 
+scp root@192.168.122.101:/home/development/AIOCC/source/install/* /home/development/AIOCC/source/install/
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/AIOCC'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/AIOCC --location=/home/development/
+sh /home/development/AIOCC/batch/install/auto_lustre2.9.0_install.sh --skip_install_kernel=1
+sh /home/development/AIOCC/batch/deploy/auto_lustre2.9.0_deploy.sh --mdsnode=192.168.3.188 --devname=/dev/sda --devindex=7
+
+
+hostnamectl --static set-hostname qosnode7
+service network restart
+
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/AIOCC'
+sleep 30s
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/AIOCC --location=/home/development/
+sleep 300s
+sh /home/development/AIOCC/batch/install/auto_lustre2.9.0_install.sh
+sleep 1800s
+sh /home/development/AIOCC/batch/deploy/auto_lustre2.9.0_deploy.sh --mdsnode=192.168.122.15 --devname=/dev/sda --devindex=8
+sleep 1800s
+     
+lctl set_param osc.lustrefs-OST0000-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0001-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0002-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lctl set_param osc.lustrefs-OST0003-osc-ffff880079400800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+
+lctl set_param osc.lustrefs-OST0000-osc-ffff88007954c000.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0001-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,15,150,10000"
+lctl set_param osc.lustrefs-OST0002-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lctl set_param osc.lustrefs-OST0003-osc-ffff880078f1e800.qos_rules="1,2
+0,2147483647,0,2147483647,0,2147483647,-15,150,10000"
+lustrefs-OST0000-osc-ffff880078f1e800  lustrefs-OST0001-osc-ffff880078f1e800  lustrefs-OST0002-osc-ffff880078f1e800  lustrefs-OST0003-osc-ffff880078f1e800
+
+
+systemctl start firewalld
+firewall-cmd --zone=public --add-port=80/tcp --permanent
+firewall-cmd --reload
+
+lctl set_param ost.OSS.ost_io.nrs_tbf_tw_interval="start sscdt 1000"
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo 8 > /proc/sys/kernel/printk'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='dmesg --clear'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='dmesg'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='lctl set_param ost.OSS.ost_io.nrs_tbf_tw_interval="start sscdt 1000"'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_oss.out --cmd='cat /proc/fs/lustre/ost/OSS/ost_io/stats' | grep 'bandwidth'
+ 
+ 
+scp *.war root@123.206.16.241:/home/development/java/appBase
+
+sh /home/development/AIOCC/batch/tool/set_display.sh 1440 900
+
+
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='mkdir -p /tmp/lustre/'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='touch /tmp/lustre/lustre_tbf_cfg'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo 10485760 >  /tmp/lustre/lustre_tbf_cfg'
+
+
+yes | cp /home/ca21/DevelopmentFiles/vm/back/node* /home/ca21/DevelopmentFiles/vm/
+
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='mkdir -p /mnt/share && mkdir -p /home/development/ '
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='mount -t nfs 192.168.3.4:/home/development/ /mnt/share'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -rf /home/development/AIOCC'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='cp -rf /mnt/share/AIOCC /home/development/'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='yes | cp /home/development/AIOCC/batch/tmp/aiocc_nfs /etc/init.d/aiocc_nfs'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_capes.out --cmd='echo yes | cp /home/development/AIOCC/batch/config/hosts /etc/hosts'
+
+#sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sh /home/development/AIOCC/batch/tool/update_to_python3.5.2.sh'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sh /home/development/AIOCC/batch/aiocc/capes_install.sh' #本身会升级python
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum-buildde'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum-config-manager'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum-debug-dump'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum-debug-restore'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yumdownloader'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/bin/yum-groups-manager'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sed -i "s/\/usr\/bin\/python2.72.7/\/usr\/bin\/python2.7/g" /usr/libexec/urlgrabber-ext-down'
+
+ 
+
+sh /home/development/AIOCC/source/aiocc/capes/capes-oss/intfdaemon_service.sh conf.py start
+
+#conda create -n py35 python=3.5 anaconda
+#conda info --env
+#source activate py35
+sh /home/development/AIOCC/source/aiocc/capes/capes-oss/dqldaemon_service.sh conf.py start
+
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_capes.out --cmd='cd /home/development/AIOCC/source/aiocc/capes/capes-oss/ && sh ma_service.sh conf.py start'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_capes.out --cmd='cd /home/development/AIOCC/source/aiocc/ && tail -f log/ma_log.txt'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --sendfile=/home/development/AIOCC/source/aiocc/capes/capes-oss/ascar/MonitorAgent.py --location=/home/development/AIOCC/source/aiocc/capes/capes-oss/ascar/
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_capes.out --cmd='for tp in $(ps -ef | grep -v grep | grep tail | awk "{print $2}"); do kill -9 $tp; done'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_capes.out --cmd='truncate --size=0 /home/development/AIOCC/source/aiocc/log/*'
+
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.166 aiocc.node.ca06 aiocc.node.ca06">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.167 aiocc.node.ca07 aiocc.node.ca07">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.181 aiocc.node.ca21 aiocc.node.ca21">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.182 aiocc.node.ca22 aiocc.node.ca22">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.187 aiocc.node.ca27 aiocc.node.ca27">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.188 aiocc.node.ca28 aiocc.node.ca28">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.97 aiocc.node.ca97 aiocc.node.ca97">> /etc/hosts'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo  "192.168.3.4 aiocc.node.zlf aiocc.node.zlf">> /etc/hosts'
+
+
+备份qcow2文件注意事项
+1.hostnamectl --static set-hostname qosnode7 和 vi vim /etc/sysconfig/network-scripts/ifcfg- 敲进去
+2.防火墙关闭
+3.nfs挂载
+    mount -t nfs 192.168.3.181:/home/development/ /mnt/share
+    /etc/init.d/aiocc_nfs && cd /mnt/share/AIOCC/source/install/
+4.留一块空白分区给Lustre用
+5.客户端的内存可以适当大一点
+
+
+
+cp -rf /usr/local/lib/python3.5/site-packages/numpy /usr/local/python3.5/lib/python3.5/site-packages
+
+find AIOCC -name \*.py -type f -exec chmod a+x {} \;
+
+ssh -p 9527 -fCNR www.dengshijun.cn:10004:localhost:22 root@www.dengshijun.cn
+ssh -p 9527  -fCNL *:10004:www.dengshijun.cn:10004 root@www.dengshijun.cn
+ssh root@localhost -p 10004
+
+date -s "20180327 21:06:10" &&  hwclock --systohc && sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='date -s "20180327 21:06:12" &&  hwclock --systohc'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo false > /home/development/AIOCC/batch/tool/work_loop.cfg'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='rm -f /home/development/AIOCC/source/tool/*.txt '
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='echo true > /home/development/AIOCC/batch/tool/work_loop.cfg'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sh /home/development/AIOCC/batch/tool/monitor.sh &'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='sh /home/development/AIOCC/batch/tool/ntp_tool.sh &'
+
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='yum -y install ntp'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='systemctl start ntpd'
+sh /home/development/AIOCC/batch/ctrl/multexu.sh --iptable=nodes_all.out --cmd='systemctl enable ntpd'
+
+ps -aux | sort -k4nr | head -N
+

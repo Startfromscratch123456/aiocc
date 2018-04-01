@@ -1,18 +1,9 @@
-? Module.markers
-? cc.1.8.patch
-? cc.patch
-? build/Module.markers
-? ldiskfs/Module.markers
-? lustre/lov/.lov:q.swp
-? lustre/ost/ost_nrs.c
-? lustre/ost/ost_nrs.c-bak
-Index: lustre/include/lustre_export.h
 ===================================================================
 RCS file: /cvsroot/cfs/lustre-core/include/lustre_export.h,v
 retrieving revision 1.4.6.9.2.1.2.12
 diff -p -u -r1.4.6.9.2.1.2.12 lustre_export.h
---- lustre/include/lustre_export.h	18 Nov 2008 21:39:58 -0000	1.4.6.9.2.1.2.12
-+++ lustre/include/lustre_export.h	1 Mar 2010 11:39:58 -0000
+--- lustre/include/lustre_export.h	18 Nov 2017 21:39:58 -0000	1.4.6.9.2.1.2.12
++++ lustre/include/lustre_export.h	1 Mar 2017 11:39:58 -0000
 @@ -123,6 +123,7 @@ struct obd_export {
          struct portals_handle     exp_handle;
          atomic_t                  exp_refcount;
@@ -44,8 +35,8 @@ Index: lustre/include/lustre_net.h
 RCS file: /cvsroot/cfs/lustre-core/include/lustre_net.h,v
 retrieving revision 1.9.6.28.4.16.2.1
 diff -p -u -r1.9.6.28.4.16.2.1 lustre_net.h
---- lustre/include/lustre_net.h	25 Mar 2009 03:58:46 -0000	1.9.6.28.4.16.2.1
-+++ lustre/include/lustre_net.h	1 Mar 2010 11:40:29 -0000
+--- lustre/include/lustre_net.h	25 Mar 2017 03:58:46 -0000	1.9.6.28.4.16.2.1
++++ lustre/include/lustre_net.h	1 Mar 2017 11:40:29 -0000
 @@ -292,6 +292,22 @@ struct ptlrpc_hpreq_ops {
          int  (*hpreq_check)(struct ptlrpc_request *);
  };
@@ -193,8 +184,8 @@ Index: lustre/include/lustre/lustre_idl.h
 RCS file: /cvsroot/cfs/lustre-core/include/lustre/lustre_idl.h,v
 retrieving revision 1.3.12.26.2.3.2.17.2.6
 diff -p -u -r1.3.12.26.2.3.2.17.2.6 lustre_idl.h
---- lustre/include/lustre/lustre_idl.h	7 Apr 2009 07:26:20 -0000	1.3.12.26.2.3.2.17.2.6
-+++ lustre/include/lustre/lustre_idl.h	1 Mar 2010 11:40:50 -0000
+--- lustre/include/lustre/lustre_idl.h	7 Apr 2017 07:26:20 -0000	1.3.12.26.2.3.2.17.2.6
++++ lustre/include/lustre/lustre_idl.h	1 Mar 2017 11:40:50 -0000
 @@ -2071,6 +2071,7 @@ struct obdo {
  #define o_undirty o_mode
  #define o_dropped o_misc
@@ -208,8 +199,8 @@ Index: lustre/ldlm/ldlm_lib.c
 RCS file: /cvsroot/cfs/lustre-core/ldlm/ldlm_lib.c,v
 retrieving revision 1.96.6.38.2.2.2.25.2.14
 diff -p -u -r1.96.6.38.2.2.2.25.2.14 ldlm_lib.c
---- lustre/ldlm/ldlm_lib.c	14 Apr 2009 18:18:13 -0000	1.96.6.38.2.2.2.25.2.14
-+++ lustre/ldlm/ldlm_lib.c	1 Mar 2010 11:41:08 -0000
+--- lustre/ldlm/ldlm_lib.c	14 Apr 2017 18:18:13 -0000	1.96.6.38.2.2.2.25.2.14
++++ lustre/ldlm/ldlm_lib.c	1 Mar 2017 11:41:08 -0000
 @@ -1922,12 +1922,19 @@ target_send_reply(struct ptlrpc_request 
  
  int target_handle_ping(struct ptlrpc_request *req)
@@ -235,8 +226,8 @@ Index: lustre/obdclass/genops.c
 RCS file: /cvsroot/cfs/lustre-core/obdclass/genops.c,v
 retrieving revision 1.145.6.22.2.3.2.15.4.3
 diff -p -u -r1.145.6.22.2.3.2.15.4.3 genops.c
---- lustre/obdclass/genops.c	16 Apr 2009 07:16:42 -0000	1.145.6.22.2.3.2.15.4.3
-+++ lustre/obdclass/genops.c	1 Mar 2010 11:41:17 -0000
+--- lustre/obdclass/genops.c	16 Apr 2017 07:16:42 -0000	1.145.6.22.2.3.2.15.4.3
++++ lustre/obdclass/genops.c	1 Mar 2017 11:41:17 -0000
 @@ -705,6 +705,7 @@ struct obd_export *class_new_export(stru
          export->exp_lock_hash = NULL;
          atomic_set(&export->exp_refcount, 2);
@@ -258,8 +249,8 @@ Index: lustre/osc/osc_request.c
 RCS file: /cvsroot/cfs/lustre-core/osc/osc_request.c,v
 retrieving revision 1.284.6.49.2.5.2.23.2.11
 diff -p -u -r1.284.6.49.2.5.2.23.2.11 osc_request.c
---- lustre/osc/osc_request.c	20 Apr 2009 05:14:49 -0000	1.284.6.49.2.5.2.23.2.11
-+++ lustre/osc/osc_request.c	1 Mar 2010 11:41:44 -0000
+--- lustre/osc/osc_request.c	20 Apr 2017 05:14:49 -0000	1.284.6.49.2.5.2.23.2.11
++++ lustre/osc/osc_request.c	1 Mar 2017 11:41:44 -0000
 @@ -847,6 +847,11 @@ static void osc_update_grant(struct clie
          CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
          if (body->oa.o_valid & OBD_MD_FLGRANT)
@@ -296,7 +287,7 @@ RCS file: /cvsroot/cfs/lustre-core/ost/Makefile.in,v
 retrieving revision 1.4
 diff -p -u -r1.4 Makefile.in
 --- lustre/ost/Makefile.in	2 Jun 2004 15:04:27 -0000	1.4
-+++ lustre/ost/Makefile.in	1 Mar 2010 11:41:44 -0000
++++ lustre/ost/Makefile.in	1 Mar 2017 11:41:44 -0000
 @@ -1,4 +1,4 @@
  MODULES := ost
 -ost-objs := ost_handler.o lproc_ost.o
@@ -308,8 +299,8 @@ Index: lustre/ost/ost_handler.c
 RCS file: /cvsroot/cfs/lustre-core/ost/ost_handler.c,v
 retrieving revision 1.184.6.35.2.1.2.19.2.3
 diff -p -u -r1.184.6.35.2.1.2.19.2.3 ost_handler.c
---- lustre/ost/ost_handler.c	13 Jan 2009 23:54:06 -0000	1.184.6.35.2.1.2.19.2.3
-+++ lustre/ost/ost_handler.c	1 Mar 2010 11:42:01 -0000
+--- lustre/ost/ost_handler.c	13 Jan 2017 23:54:06 -0000	1.184.6.35.2.1.2.19.2.3
++++ lustre/ost/ost_handler.c	1 Mar 2017 11:42:01 -0000
 @@ -588,6 +588,7 @@ static int ost_brw_read(struct ptlrpc_re
          __u32  size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
          int niocount, npages, nob = 0, rc, i;
@@ -352,7 +343,7 @@ diff -p -u -r1.184.6.35.2.1.2.19.2.3 ost_handler.c
          if (rc == 0) {
                  int nob = 0;
  
-@@ -2007,10 +2014,16 @@ static int ost_setup(struct obd_device *
+@@ -2017,10 +2014,16 @@ static int ost_setup(struct obd_device *
          ost->ost_io_service->srv_init = ost_thread_init;
          ost->ost_io_service->srv_done = ost_thread_done;
          ost->ost_io_service->srv_cpu_affinity = 1;
@@ -384,8 +375,8 @@ Index: lustre/ost/ost_internal.h
 RCS file: /cvsroot/cfs/lustre-core/ost/ost_internal.h,v
 retrieving revision 1.2.34.5.6.2.24.1
 diff -p -u -r1.2.34.5.6.2.24.1 ost_internal.h
---- lustre/ost/ost_internal.h	9 Jan 2009 04:35:02 -0000	1.2.34.5.6.2.24.1
-+++ lustre/ost/ost_internal.h	1 Mar 2010 11:42:01 -0000
+--- lustre/ost/ost_internal.h	9 Jan 2017 04:35:02 -0000	1.2.34.5.6.2.24.1
++++ lustre/ost/ost_internal.h	1 Mar 2017 11:42:01 -0000
 @@ -87,4 +87,14 @@ enum {
          NUM_SYNC_ON_CANCEL_STATES
  };
@@ -406,8 +397,8 @@ Index: lustre/ptlrpc/service.c
 RCS file: /cvsroot/cfs/lustre-core/ptlrpc/service.c,v
 retrieving revision 1.114.30.25.2.1.2.17
 diff -p -u -r1.114.30.25.2.1.2.17 service.c
---- lustre/ptlrpc/service.c	24 Nov 2008 13:34:41 -0000	1.114.30.25.2.1.2.17
-+++ lustre/ptlrpc/service.c	1 Mar 2010 11:42:15 -0000
+--- lustre/ptlrpc/service.c	24 Nov 2017 13:34:41 -0000	1.114.30.25.2.1.2.17
++++ lustre/ptlrpc/service.c	1 Mar 2017 11:42:15 -0000
 @@ -517,6 +517,9 @@ static void ptlrpc_server_finish_request
          list_del_init(&req->rq_timed_list);
          spin_unlock(&svc->srv_at_lock);
@@ -512,8 +503,8 @@ diff -p -u -r1.114.30.25.2.1.2.17 service.c
          /* In case somebody rearmed this in the meantime */
          cfs_timer_disarm(&service->srv_at_timer);
  
---- /dev/null	2010-02-28 23:25:39.678528422 +0800
-+++ lustre/ost/ost_nrs.c	2010-03-01 03:06:00.000000000 +0800
+--- /dev/null	2017-02-28 23:25:39.678528422 +0800
++++ lustre/ost/ost_nrs.c	2017-03-01 03:06:00.000000000 +0800
 @@ -0,0 +1,2222 @@
 +/* vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -542,7 +533,7 @@ diff -p -u -r1.114.30.25.2.1.2.17 service.c
 + * GPL HEADER END
 + */
 +/*
-+ * Copyright  2008 Sun Microsystems, Inc. All rights reserved
++ * Copyright  2017 Sun Microsystems, Inc. All rights reserved
 + * Use is subject to license terms.
 + */
 +/*
