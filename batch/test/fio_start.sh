@@ -39,17 +39,17 @@ blocksize=1 #the blocksize
 #测试目录
 directory="/mnt/lustre/test"
 direct=0
-iodepth=2
+iodepth=5
 allow_mounted_write=1
-ioengine_name=("sync")
+ioengine_name=("posixaio" "sync" "vsync" "psync")
 special_cmd="-rwmixread=" #随机IO时的一些特殊参数
-size="2G"
-numjobs=20
+size="1G"
+numjobs=30
 runtime=600
 name="aiocc_test"
 
 blocksize_start=1
-blocksize_end=4096
+blocksize_end=1024
 blocksize_multi_step=2
 
 rwmixread_start=10
@@ -57,17 +57,16 @@ rwmixread_end=90
 rwmixread_add_step=10
 
 round_start=1
-round_end=60
+round_end=600
 round_add_step=1
 
 #设置检测测试是否结束的时间以及检测的下限
 checktime_init=180
-checktime_lower_limit=90
+checktime_lower_limit=60
 #IO方式
 declare -a rw_array;#Type of I/O pattern. 
 
 #fio的读写方式
-#rw_array=("randrw" "readwrite")
 rw_array=("readwrite" "randrw" "read" "randread" "write" "randwrite")
 
 #获取客户端的ip地址,只需要其中一个即可,用作向服务器发命令,清除测试产生的文件
@@ -83,7 +82,7 @@ declare -a policy_name
 #policy_name[0]="tbf-jobid"
 #policy_name[1]="crrn-pid"
 #policy_name[2]="orr-pid"
-policy_name[0]="R-0"
+policy_name[0]="tbf-jobid"
 
 #获取参数值
 function get_parameter()
@@ -153,61 +152,64 @@ print_message "MULTEXU_INFO" "the script clear_var_log_messages.sh is running in
 print_message "MULTEXU_INFO" "now start the test processes..."
 for ioengine in ${ioengine_name[*]}
 do
-    for rw_pattern in ${rw_array[*]}
+    for policy in ${policy_name[*]}
     do
-        #测试结果的存放目录
-        rs_store_dir="${result_dir}/${ioengine}/${rw_pattern}"
-        auto_mkdir "${rs_store_dir}" "weak"    
-        print_message "MULTEXU_ECHO" "    rw_array:${rw_pattern}"
         #修改调度器 并显示修改后的调度器名称  注意调度器实际命令需要引号 故传入的参数需要转义
-        #sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_oss.out --supercmd="lctl set_param ost.OSS.ost_io.nrs_policies=\"${policy/-/ }\""
-        #print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
+        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_oss.out --supercmd="lctl set_param ost.OSS.ost_io.nrs_policies=\"${policy/-/ }\""
+        print_message "MULTEXU_INFO" "policy_name:${policy/-/ }"
         for ((blocksize=${blocksize_end}; blocksize>=${blocksize_start}; blocksize/=${blocksize_multi_step}))
         do
-            for ((rwmixread=${rwmixread_start}; rwmixread<=${rwmixread_end}; rwmixread+=${rwmixread_add_step}))
+            for rw_pattern in ${rw_array[*]}
             do
-                special_cmd_io_choice=
-                if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
-                    special_cmd_io_choice="${special_cmd}${rwmixread}"
-                else
-                    #跳出循环
-                    rwmixread=$(( ${rwmixread_end} * 2 ))
-                fi
-                #for policy in ${policy_name[*]}
-            	for ((round_index=${round_start}; round_index<=${round_end}; round_index+=${round_add_step}))
+                #测试结果的存放目录
+                rs_store_dir="${result_dir}/${ioengine}/${rw_pattern}"
+                auto_mkdir "${rs_store_dir}" "weak"    
+                print_message "MULTEXU_ECHO" "    rw_array:${rw_pattern}"
+                for ((rwmixread=${rwmixread_start}; rwmixread<=${rwmixread_end}; rwmixread+=${rwmixread_add_step}))
                 do
-                    if [ x`$EXIT_SIGNAL` = x"EXIT" ];then
-                        print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
-                        exit 0
-                    fi
-                    sh ./agency_cmd.sh
-                    print_message "MULTEXU_ECHO" "        start a test:round=${round_index}..."   
-                    #删除测试文件,一定放在最内循环
-                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -rf ${directory}/*"
-                    sleep ${sleeptime}s
-                    cmd_var="${MULTEXU_SOURCE_TOOL_DIR}/fio/fio -direct=${direct} -iodepth ${iodepth} -thread -rw=${rw_pattern} ${special_cmd_io_choice} -allow_mounted_write=${allow_mounted_write} -ioengine=${ioengine} -bs=${blocksize}k -size=${size} -numjobs=${numjobs} -runtime=${runtime} -group_reporting -name=${name}"
-                    print_message "MULTEXU_ECHO" "        test command:${cmd_var}"
-                    #测试结果文件名称,组成方式:读写模式-调度器-块大小k-混合读写比例.txt
+                    special_cmd_io_choice=
                     if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
-                        filename="${rw_pattern}-round${round_index}-${blocksize}k-${rwmixread}.txt"
+                        special_cmd_io_choice="${special_cmd}${rwmixread}"
                     else
-                        filename="${rw_pattern}-round${round_index}-${blocksize}k.txt"
+                        #跳出循环
+                        rwmixread=$(( ${rwmixread_end} * 2 ))
                     fi
-                    touch "${rs_store_dir}/${filename}"
-                    `${PAUSE_CMD}`    
-                    echo "${cmd_var}" > ${rs_store_dir}/${filename}
-                    #测试结果写入文件
-                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh "${MULTEXU_BATCH_TEST_DIR}"/_test_exe.sh \"${cmd_var}\" \"${directory}\"" >> ${rs_store_dir}/${filename}
-                    #检测测试是否完成
-                    ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
-                    #清除标记
-                    sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"            
-                    print_message "MULTEXU_ECHO" "        finish this test..."
-                    `${PAUSE_CMD}`
-                done #round
-            done #rwmixread
-        done #block_size
-    done #rw_pattern
+                    #for policy in ${policy_name[*]}
+                    for ((round_index=${round_start}; round_index<=${round_end}; round_index+=${round_add_step}))
+                    do
+                        if [ x`$EXIT_SIGNAL` = x"EXIT" ];then
+                            print_message "MULTEXU_ECHO" "EXIT SIGNAL detected..."
+                            exit 0
+                        fi
+                        source ./agency_cmd.sh
+                        print_message "MULTEXU_ECHO" "        start a test:round=${round_index}..."   
+                        #删除测试文件,一定放在最内循环
+                        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=${client_ip} --cmd="rm -rf ${directory}/*"
+                        sleep ${sleeptime}s
+                        cmd_var="${MULTEXU_SOURCE_TOOL_DIR}/fio/fio -direct=${direct} -iodepth ${iodepth} -thread -rw=${rw_pattern} ${special_cmd_io_choice} -allow_mounted_write=${allow_mounted_write} -ioengine=${ioengine} -bs=${blocksize}k -size=${size} -numjobs=${numjobs} -runtime=${runtime} -group_reporting -name=${name}"
+                        print_message "MULTEXU_ECHO" "        test command:${cmd_var}"
+                        #测试结果文件名称,组成方式:读写模式-调度器-块大小k-混合读写比例.txt
+                        if [[ ${rw_pattern} == "readwrite" ]] || [[ ${rw_pattern} == "randrw" ]];then
+                            filename="${rw_pattern}-round${round_index}-${blocksize}k-${rwmixread}.txt"
+                        else
+                            filename="${rw_pattern}-round${round_index}-${blocksize}k.txt"
+                        fi
+                        touch "${rs_store_dir}/${filename}"
+                        `${PAUSE_CMD}`    
+                        echo "${cmd_var}" > ${rs_store_dir}/${filename}
+                        #测试结果写入文件
+                        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --supercmd="sh "${MULTEXU_BATCH_TEST_DIR}"/_test_exe.sh \"${cmd_var}\" \"${directory}\"" >> ${rs_store_dir}/${filename}
+                        #检测测试是否完成
+                        ssh_check_cluster_status "nodes_client.out" "${MULTEXU_STATUS_EXECUTE}" ${checktime_init} ${checktime_lower_limit}
+                        #清除标记
+                        sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"            
+                        print_message "MULTEXU_ECHO" "        finish this test..."
+                        `${PAUSE_CMD}`
+                    done #round
+                done #rwmixread
+            done #block_size
+        done #rw_pattern
+    done #policy
 done #ioengine
 
 sh ${MULTEXU_BATCH_CRTL_DIR}/multexu.sh --iptable=nodes_client.out --cmd="sh ${MULTEXU_BATCH_CRTL_DIR}/multexu_ssh.sh  --clear_execute_statu_signal"
