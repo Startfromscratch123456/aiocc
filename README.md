@@ -35,7 +35,10 @@ AIOCC说明是在Lustre2.9+CenOS7上实现原型系统,并在[MULTEXU](https://g
 
 **AIOCC可视化监控使用**
 
-AIOCC开放了一个展示系统，访问地址193.112.37.106:3000或者http://www.aiocc.xyz:3000，用户名和密码分别是aiocc和aiocc2018。登录之后，点击左上角的HOME，再到AIOCC目录下查看相关监控情况。
+AIOCC开放了一个展示系统：
+
+- 访问地址193.112.37.106:3000或者http://www.aiocc.xyz:3000
+- 用户名和密码分别是aiocc和aiocc2018，登录之后，点击左上角的HOME，再到AIOCC目录下查看相关监控情况。
 
 
 
