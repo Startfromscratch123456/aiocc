@@ -6,7 +6,6 @@ Automatic I/O congestion control(AIOCC)
 [![Progress](http://progressed.io/bar/80?title=completed)]()
 
 
-# [访问AIOCC可视化监控平台](http://www.aiocc.xyz:3000)
 
 
 # 为什么会有AIOCC
@@ -31,7 +30,7 @@ AIOO是一种完全自动I/O拥塞控制机制，在Lustre客户端和服务端�
 
 **AIOCC安装&使用说明**
 
-- AIOCC说明是在Lustre2.9+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)、[ASCAR](https://github.com/mlogic/ascar-lustre-sharp)、CAPES基础上开发的。AIOCC针对的是CentOS7（Linux kernel 3.10.0-514.el7.x86_64）和Lustre2.9.0，其它版本的系统使用本工具可能需要解决一些兼容性问题
+- AIOCC说明是在Lustre2.9+CenOS7上实现原型系统,并在[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)基础上开发的。AIOCC针对的是CentOS7（Linux kernel 3.10.0-514.el7.x86_64）和Lustre2.9.0，其它版本的系统使用本工具可能需要解决一些兼容性问题
 - CentOS7在安装过程中，选择的版本和安装配置不同，也可能导致一些包的依赖性问题，因此建议CentOS7的安装过程参照视频教程进行安装。AIOCC自带Lustre2.9.0全套安装文件。安装和测试参照[技术文档说明](https://github.com/ShijunDeng/aiocc/tree/master/document)、[MULTEXU](https://github.com/ShijunDeng/multexu)、[LustreTools](https://github.com/ShijunDeng/LustreTools)中相关步骤
 
 - 由于Lustre的需要对内核打补丁，直接在物理上进行AIOCC测试可能出现某些操作问题、软件兼容性问题导致的内核崩溃，建议您先使用虚拟机节点构建AIOCC，熟悉相关步骤之后，再在物理机进行测试。对于CentOS的安装最好和我们的视频教程中的保持一致。如果您有任何问题和建议，非常欢迎同我联系。全部文件的下载地址，参见[LustreTools](http://pan.baidu.com/s/1gfDkj7P)下载
