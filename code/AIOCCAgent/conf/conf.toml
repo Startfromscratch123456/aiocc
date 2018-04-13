@@ -1,0 +1,35 @@
+#监控agent的名称
+AgentName="aiocc monitor angent"
+#要被监控的进程的名称
+ProcessList=["aiocc"]
+#日志文件的目录
+LogFilePath="log/"
+LogFileName="monitor.log"
+LogPrefix="[didicloud monitor] "
+#上报路径
+UploadURL="http://www.dengshijun.cn:8080/tenxun"
+#上报数据是否需要压缩
+CompressOP=false
+#上报数据时间间隔 s
+UploadInterval=10
+#数据的采集频率
+DiskCollectInterval=10
+CpuCollectInterval=10
+MemoryCollectInterval=10
+TcpCollectInterval=10
+UdpCollectInterval=10
+NetCollectInterval=10
+ProcessCollectInterval=10
+SystemCollectInterval=10
+#uuid 请求路径
+UUIDRequestURL="http://www.aiocc.xyz:8008/2009-04-04/meta-data/instance-id"
+#uuid 暂存路径
+UUIDFile="var/.aiocc-uuid"
+#存储监控程序的进程号文件
+PIDFile="var/.aiocc-pid"
+#存储系统启动时间文件
+UPTIMEFile="var/.aiocc-uptime"
+#http请求超时时间:用于向上报数据
+UploadDeadline=5
+#http请求超时时间:用于请求元数据信息
+RequestDeadline=5
