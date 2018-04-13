@@ -1,0 +1,45 @@
+<?xml version="1.0" ?>
+<hosts>
+    <host>
+        <ip>192.168.122.17</ip>
+        <domain>qosnode7</domain>
+        <hostname>qosnode7</hostname>
+        <property>client</property>
+    </host>
+    <host>
+        <ip>192.168.122.11</ip>
+        <domain>qosnode1</domain>
+        <hostname>qosnode1</hostname>
+        <property>oss</property>
+    </host>
+    <host>
+        <ip>192.168.122.12</ip>
+        <domain>qosnode2</domain>
+        <hostname>qosnode2</hostname>
+        <property>oss</property>
+    </host>
+    <host>
+        <ip>192.168.122.16</ip>
+        <domain>qosnode6</domain>
+        <hostname>qosnode6</hostname>
+        <property>client</property>
+    </host>
+    <host>
+        <ip>192.168.122.13</ip>
+        <domain>qosnode3</domain>
+        <hostname>qosnode3</hostname>
+        <property>oss</property>
+    </host>
+    <host>
+        <ip>192.168.122.15</ip>
+        <domain>qosnode5</domain>
+        <hostname>qosnode5</hostname>
+        <property>mds</property>
+    </host>
+    <host>
+        <ip>192.168.122.14</ip>
+        <domain>qosnode4</domain>
+        <hostname>qosnode4</hostname>
+        <property>oss</property>
+    </host>
+</hosts>
